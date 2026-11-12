@@ -31,8 +31,8 @@ final class WindowModel: ObservableObject {
     @Published var flash = false
     @Published var exportProgress: Double?
     @Published var errorMessage: String?
-    /// The width of the filmstrip's thumbnails, from `thumbnailWidths`. New
-    /// windows start at the size last chosen.
+    /// The width of the filmstrip's frames, from `thumbnailWidths`; their
+    /// height never changes. New windows start at the width last chosen.
     @Published private(set) var thumbnailWidth: CGFloat =
         WindowModel.thumbnailWidths.contains(CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")))
         ? CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")) : 112
@@ -123,7 +123,7 @@ final class WindowModel: ObservableObject {
 
     // MARK: - Filmstrip zoom
 
-    static let thumbnailWidths: [CGFloat] = [48, 72, 112, 160, 240]
+    static let thumbnailWidths: [CGFloat] = [24, 40, 64, 112, 168, 240]
 
     var canZoomInTimeline: Bool { thumbnailWidth < Self.thumbnailWidths.last! }
     var canZoomOutTimeline: Bool { thumbnailWidth > Self.thumbnailWidths.first! }

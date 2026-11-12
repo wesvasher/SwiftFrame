@@ -12,13 +12,13 @@ import Testing
         let model = WindowModel(document: StopMotionDocument())
         #expect(model.thumbnailWidth == 112)
         model.zoomInTimeline()
-        #expect(model.thumbnailWidth == 160)
+        #expect(model.thumbnailWidth == 168)
         for _ in 0..<10 { model.zoomInTimeline() }
         #expect(model.thumbnailWidth == 240 && !model.canZoomInTimeline)
         for _ in 0..<10 { model.zoomOutTimeline() }
-        #expect(model.thumbnailWidth == 48 && !model.canZoomOutTimeline)
+        #expect(model.thumbnailWidth == 24 && !model.canZoomOutTimeline)
 
         // New windows start at the last size chosen.
-        #expect(WindowModel(document: StopMotionDocument()).thumbnailWidth == 48)
+        #expect(WindowModel(document: StopMotionDocument()).thumbnailWidth == 24)
     }
 }

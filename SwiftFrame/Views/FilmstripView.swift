@@ -33,7 +33,7 @@ struct FilmstripView: View {
                 else { proxy.scrollTo(Self.liveID, anchor: .trailing) }
             }
         }
-        .frame(height: FrameCell.height(thumbnailWidth: model.thumbnailWidth) + 16)
+        .frame(height: FrameCell.height + 16)
         .background(.bar)
     }
 
@@ -46,12 +46,13 @@ private struct FrameCell: View {
     let number: Int
     @State private var isTargeted = false
 
-    /// The cell's height: a 16:9 thumbnail plus its number.
-    static func height(thumbnailWidth: CGFloat) -> CGFloat {
-        thumbnailHeight(thumbnailWidth) + 29
-    }
-
-    static func thumbnailHeight(_ width: CGFloat) -> CGFloat { (width * 9 / 16).rounded() }
+    /// Thumbnails are always this tall; zooming the timeline changes only
+    /// their width.
+    static let thumbnailHeight: CGFloat = 63
+    /// The width at which a 16:9 picture fits whole.
+    static let standardWidth: CGFloat = 112
+    /// The cell's height: the thumbnail plus its number.
+    static let height: CGFloat = thumbnailHeight + 29
 
     private var isSelected: Bool { model.selection.contains(frame.id) }
     private var isPlaying: Bool { model.mode == .playback && model.playingFrame == frame.id }
@@ -60,9 +61,13 @@ private struct FrameCell: View {
         VStack(spacing: 3) {
             ZStack {
                 Color.black
+                // Fitted to the height and centered: narrow frames show the
+                // middle of the picture, wide ones leave black at the sides.
                 FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
+                    .frame(height: FrameCell.thumbnailHeight)
+                    .fixedSize(horizontal: true, vertical: false)
             }
-            .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight(model.thumbnailWidth))
+            .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight)
             .clipShape(.rect(cornerRadius: 4))
             .overlay(alignment: .bottomTrailing) {
                 if frame.hold > 1 {
@@ -76,6 +81,9 @@ private struct FrameCell: View {
             }
             Text("\(number)")
                 .font(.caption.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(width: model.thumbnailWidth)
                 .foregroundStyle(isSelected ? .white : .secondary)
         }
         .padding(4)
@@ -92,7 +100,7 @@ private struct FrameCell: View {
         .onTapGesture { model.click(frame.id, modifiers: NSEvent.modifierFlags) }
         .draggable(FrameDrag(id: frame.id)) {
             FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
-                .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight(model.thumbnailWidth))
+                .frame(width: FrameCell.standardWidth, height: FrameCell.thumbnailHeight)
         }
         .dropDestination(for: FrameDrop.self) { items, _ in
             handleDrop(items, before: frame.id)
@@ -118,7 +126,7 @@ private struct LiveCell: View {
                 RoundedRectangle(cornerRadius: 4).fill(.quaternary)
                 Image(systemName: "camera.fill").font(.title2).foregroundStyle(.secondary)
             }
-            .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight(model.thumbnailWidth))
+            .frame(width: FrameCell.standardWidth, height: FrameCell.thumbnailHeight)
             Text("Live").font(.caption).foregroundStyle(model.mode == .live ? .white : .secondary)
         }
         .padding(4)
