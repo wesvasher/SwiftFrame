@@ -277,35 +277,52 @@ private struct Playhead: View {
 
     var body: some View {
         GeometryReader { proxy in
-            TimelineView(.animation(paused: model.mode != .playback)) { context in
-                ZStack {
-                    Color.clear
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(colorScheme == .dark ? Color.white : Color.black)
-                        .shadow(radius: 2)
-                        .frame(width: isActive ? 4 : 2)
-                        // Faint while thin, so it doesn't hide the pictures; full strength when grabbed.
-                        .opacity(isActive ? 1 : 0.35)
+            if model.mode == .playback {
+                // Made fresh each time playback starts: a paused TimelineView
+                // doesn't always start ticking again when unpaused.
+                TimelineView(.animation) { context in
+                    line(height: proxy.size.height, x: x(at: context.date))
                 }
-                .animation(.easeOut(duration: 0.12), value: isActive)
-                .frame(width: grabWidth, height: proxy.size.height - 4)
-                .contentShape(.rect)
-                .offset(x: x(at: context.date) - grabWidth / 2, y: 2)
-                .gesture(drag)
-                .onHover { isHovered = $0 }
-                .help("Drag to move the playhead")
+            } else {
+                line(height: proxy.size.height, x: x(at: Date()))
             }
         }
     }
 
+    private func line(height: CGFloat, x: CGFloat) -> some View {
+        ZStack {
+            Color.clear
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(colorScheme == .dark ? Color.white : Color.black)
+                .shadow(radius: 2)
+                .frame(width: isActive ? 4 : 2)
+                // Faint while thin, so it doesn't hide the pictures; full strength when grabbed.
+                .opacity(isActive ? 1 : 0.35)
+        }
+        .animation(.easeOut(duration: 0.12), value: isActive)
+        .frame(width: grabWidth, height: height - 4)
+        .contentShape(.rect)
+        .offset(x: x - grabWidth / 2, y: 2)
+        .gesture(drag)
+        .onHover { isHovered = $0 }
+        .help("Drag to move the playhead")
+    }
+
+    /// The middle of the frame at `index`.
+    private func center(_ index: Int) -> CGFloat {
+        let width = model.thumbnailWidth
+        return FilmstripLayout.cellX(index, thumbnailWidth: width) + FilmstripLayout.cellPadding(width) + width / 2
+    }
+
     private func x(at date: Date) -> CGFloat {
         let width = model.thumbnailWidth
-        let inside = FilmstripLayout.cellPadding(width)
         if model.mode == .playback, let position = model.playbackPosition(at: date) {
-            return FilmstripLayout.cellX(position.index, thumbnailWidth: width) + inside + width * position.fraction
+            // Glides evenly from this frame's middle to the next one's over
+            // the frame's time on screen (1/12 s at 12 fps, longer when held).
+            return center(position.index) + FilmstripLayout.stride(width) * position.fraction
         }
         if model.mode == .review, let id = model.current, let index = model.frames.firstIndex(of: id) {
-            return FilmstripLayout.cellX(index, thumbnailWidth: width) + inside + width / 2
+            return center(index)
         }
         // Live: in the gap after the last frame, where the next capture goes.
         return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width)
