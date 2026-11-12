@@ -165,6 +165,23 @@ final class WindowModel: ObservableObject {
 
     var canZoomInTimeline: Bool { thumbnailWidth < Self.thumbnailWidths.last! }
     var canZoomOutTimeline: Bool { thumbnailWidth > Self.thumbnailWidths.first! }
+    /// The filmstrip's visible width, for zooming to fit.
+    var filmstripVisibleWidth: CGFloat = 0
+
+    var canZoomTimelineToFit: Bool {
+        !frames.isEmpty && abs(fitWidth - thumbnailWidth) > 0.5
+    }
+
+    private var fitWidth: CGFloat {
+        FilmstripLayout.fitWidth(count: frames.count, visibleWidth: filmstripVisibleWidth,
+                                 maxWidth: Self.thumbnailWidths.last!)
+    }
+
+    /// Zooms the timeline out (or in) so every frame and the Live tile fit.
+    func zoomTimelineToFit() {
+        guard !frames.isEmpty, filmstripVisibleWidth > 0 else { return }
+        setThumbnailWidth(fitWidth)
+    }
 
     func zoomInTimeline() {
         if let next = Self.thumbnailWidths.first(where: { $0 > thumbnailWidth }) { setThumbnailWidth(next) }
@@ -176,7 +193,10 @@ final class WindowModel: ObservableObject {
 
     private func setThumbnailWidth(_ width: CGFloat) {
         thumbnailWidth = width
-        UserDefaults.standard.set(Double(width), forKey: "FilmstripThumbnailWidth")
+        // Fit widths depend on the project, so new windows only start at a step.
+        if Self.thumbnailWidths.contains(width) {
+            UserDefaults.standard.set(Double(width), forKey: "FilmstripThumbnailWidth")
+        }
     }
 
     // MARK: - Selection

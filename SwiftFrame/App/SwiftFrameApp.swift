@@ -92,6 +92,9 @@ struct FrameCommands: Commands {
             Button("Zoom Out Timeline") { model?.zoomOutTimeline() }
                 .keyboardShortcut("-", modifiers: .command)
                 .disabled(model?.canZoomOutTimeline != true)
+            Button("Zoom Timeline to Fit") { model?.zoomTimelineToFit() }
+                .keyboardShortcut("z", modifiers: .shift)
+                .disabled(model?.canZoomTimelineToFit != true)
             Divider()
         }
         CommandGroup(after: .importExport) {

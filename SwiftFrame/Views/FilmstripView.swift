@@ -10,7 +10,7 @@ struct FilmstripView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                LazyHStack(spacing: FilmstripLayout.spacing) {
+                LazyHStack(spacing: FilmstripLayout.spacing(model.thumbnailWidth)) {
                     ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
                         FrameCell(model: model, frame: frame, number: index + 1)
                             .id(frame.id)
@@ -29,6 +29,7 @@ struct FilmstripView: View {
                 .coordinateSpace(.named(FilmstripLayout.space))
             }
             .scrollIndicators(.visible)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.filmstripVisibleWidth = $0 }
             .onChange(of: model.frames.count) { old, new in
                 if new > old, model.mode == .live { withAnimation { proxy.scrollTo(Self.liveID, anchor: .trailing) } }
             }
@@ -52,14 +53,41 @@ struct FilmstripView: View {
 /// so positions are simple arithmetic.
 enum FilmstripLayout {
     static let inset: CGFloat = 10
-    static let spacing: CGFloat = 4
+    /// Below this width frames shrink their padding and gaps too, so a fully
+    /// zoomed-out timeline can fit many frames.
+    static let compactWidth: CGFloat = 24
+    /// The Live tile's width, padding included; it never zooms.
+    static let liveCellWidth: CGFloat = 112 + 8   // FrameCell.standardWidth + padding
+
+    /// The gap between cells.
+    static func spacing(_ thumbnailWidth: CGFloat) -> CGFloat {
+        thumbnailWidth >= compactWidth ? 4 : thumbnailWidth / 6
+    }
+
     /// The cell's padding on each side of its thumbnail.
-    static let cellPadding: CGFloat = 4
+    static func cellPadding(_ thumbnailWidth: CGFloat) -> CGFloat {
+        thumbnailWidth >= compactWidth ? 4 : thumbnailWidth / 6
+    }
     /// The strip above the frames that moves the playhead.
     static let scrubHeight: CGFloat = 18
     static let space = "filmstrip"
 
-    static func stride(_ thumbnailWidth: CGFloat) -> CGFloat { thumbnailWidth + cellPadding * 2 + spacing }
+    static func stride(_ thumbnailWidth: CGFloat) -> CGFloat {
+        thumbnailWidth + cellPadding(thumbnailWidth) * 2 + spacing(thumbnailWidth)
+    }
+
+    /// The widest thumbnail (up to `maxWidth`) at which `count` frames and the
+    /// Live tile all fit in `visibleWidth`.
+    static func fitWidth(count: Int, visibleWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
+        guard count > 0 else { return maxWidth }
+        let available = visibleWidth - inset * 2 - liveCellWidth
+        let perFrame = available / CGFloat(count)
+        // Full padding and gaps (12 points) above the compact width…
+        if perFrame - 12 >= compactWidth { return min(perFrame - 12, maxWidth) }
+        // …and a sixth of the width each (stride 1.5 × width) below it, down
+        // to half a point wide.
+        return max(0.5, min(perFrame / 1.5, compactWidth - 0.01))
+    }
 
     /// The left edge of the cell at `index` (`frames.count` is the Live tile).
     static func cellX(_ index: Int, thumbnailWidth: CGFloat) -> CGFloat {
@@ -68,7 +96,7 @@ enum FilmstripLayout {
 
     /// The cell under `x`; `frames.count` or more is the Live tile.
     static func index(at x: CGFloat, thumbnailWidth: CGFloat) -> Int {
-        max(0, Int(((x - inset + spacing / 2) / stride(thumbnailWidth)).rounded(.down)))
+        max(0, Int(((x - inset + spacing(thumbnailWidth) / 2) / stride(thumbnailWidth)).rounded(.down)))
     }
 }
 
@@ -139,7 +167,7 @@ private struct Playhead: View {
 
     private func x(at date: Date) -> CGFloat {
         let width = model.thumbnailWidth
-        let inside = FilmstripLayout.cellPadding
+        let inside = FilmstripLayout.cellPadding(width)
         if model.mode == .playback, let position = model.playbackPosition(at: date) {
             return FilmstripLayout.cellX(position.index, thumbnailWidth: width) + inside + width * position.fraction
         }
@@ -147,7 +175,7 @@ private struct Playhead: View {
             return FilmstripLayout.cellX(index, thumbnailWidth: width) + inside + width / 2
         }
         // Live: the middle of the Live tile.
-        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width) + inside + FrameCell.standardWidth / 2
+        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width) + FilmstripLayout.liveCellWidth / 2
     }
 
     private var drag: some Gesture {
@@ -178,6 +206,8 @@ private struct FrameCell: View {
 
     private var isSelected: Bool { model.selection.contains(frame.id) }
     private var isPlaying: Bool { model.mode == .playback && model.playingFrame == frame.id }
+    /// Too narrow for the grip and hold badge (a fully zoomed-out timeline).
+    private var isTiny: Bool { model.thumbnailWidth < 16 }
 
     var body: some View {
         VStack(spacing: 3) {
@@ -190,9 +220,9 @@ private struct FrameCell: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
             .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight)
-            .clipShape(.rect(cornerRadius: 4))
+            .clipShape(.rect(cornerRadius: min(4, model.thumbnailWidth / 4)))
             .overlay(alignment: .bottomTrailing) {
-                if frame.hold > 1 {
+                if frame.hold > 1, !isTiny {
                     Text("×\(frame.hold)")
                         .font(.caption2.weight(.bold).monospacedDigit())
                         .padding(.horizontal, 4).padding(.vertical, 1)
@@ -202,9 +232,10 @@ private struct FrameCell: View {
                 }
             }
             GripHandle(isSelected: isSelected)
+                .opacity(isTiny ? 0 : 1)
                 .frame(width: model.thumbnailWidth)
         }
-        .padding(4)
+        .padding(FilmstripLayout.cellPadding(model.thumbnailWidth))
         .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 7))
         .overlay {
             RoundedRectangle(cornerRadius: 7)

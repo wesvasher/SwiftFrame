@@ -108,6 +108,10 @@ private struct CaptureBar: View {
                     Button("Zoom In", systemImage: "plus.magnifyingglass", action: model.zoomInTimeline)
                         .disabled(!model.canZoomInTimeline)
                         .help("Wider frames in the timeline (⌘=)")
+                    Button("Zoom to Fit", systemImage: "arrow.right.and.line.vertical.and.arrow.left",
+                           action: model.zoomTimelineToFit)
+                        .disabled(!model.canZoomTimelineToFit)
+                        .help("Fit every frame in the timeline (⇧Z)")
                 }
                 .labelStyle(.iconOnly)
                 .fixedSize()

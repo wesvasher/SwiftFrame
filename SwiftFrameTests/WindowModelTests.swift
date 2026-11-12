@@ -101,3 +101,21 @@ import Testing
         #expect(model.frames.map(\.id) == [ids[0], ids[1], ids[3], ids[2]])
     }
 }
+
+@Suite struct FitZoomTests {
+    func totalWidth(_ count: Int, _ width: CGFloat) -> CGFloat {
+        FilmstripLayout.cellX(count, thumbnailWidth: width) + FilmstripLayout.liveCellWidth + FilmstripLayout.inset
+    }
+
+    @Test(arguments: [1, 5, 40, 120, 400])
+    func everyFrameFits(count: Int) {
+        let visible: CGFloat = 900
+        let width = FilmstripLayout.fitWidth(count: count, visibleWidth: visible, maxWidth: 240)
+        #expect(width <= 240 && width >= 0.5)
+        #expect(totalWidth(count, width) <= visible + 0.5)
+    }
+
+    @Test func fewFramesStopAtTheWidestStep() {
+        #expect(FilmstripLayout.fitWidth(count: 1, visibleWidth: 900, maxWidth: 240) == 240)
+    }
+}
