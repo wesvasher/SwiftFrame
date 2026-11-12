@@ -4,20 +4,43 @@ import SwiftUI
 /// playback.
 struct ViewerView: View {
     @ObservedObject var model: WindowModel
+    @State private var panStart: CGSize?
 
     var body: some View {
-        ZStack {
-            Color.black
-            switch model.mode {
-            case .live: LiveView(model: model)
-            case .review: ReviewView(model: model)
-            case .playback: PlaybackView(model: model)
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                switch model.mode {
+                case .live: LiveView(model: model)
+                case .review: ReviewView(model: model)
+                case .playback: PlaybackView(model: model)
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .contentShape(.rect)
+            // Drag to look around while zoomed in.
+            .gesture(DragGesture(minimumDistance: 2).onChanged { value in
+                let start = panStart ?? model.pan
+                panStart = start
+                model.setPan(CGSize(width: start.width + value.translation.width,
+                                    height: start.height + value.translation.height))
+            }.onEnded { _ in panStart = nil }, including: model.zoom > 1 ? .all : .none)
+            .onChange(of: geometry.size, initial: true) { model.viewerSize = geometry.size }
         }
         .overlay(alignment: .topLeading) { ModeBadge(model: model).padding(12) }
         .overlay { if model.flash { Color.white.opacity(0.35).allowsHitTesting(false) } }
         .animation(.easeOut(duration: 0.12), value: model.flash)
         .clipped()
+    }
+}
+
+/// Applies the window's zoom and pan, the same way `CameraPreview` does.
+struct Zoomed: ViewModifier {
+    let zoom: CGFloat
+    let pan: CGSize
+
+    func body(content: Content) -> some View {
+        content.scaleEffect(zoom).offset(pan)
     }
 }
 
@@ -48,8 +71,10 @@ private struct LiveView: View {
         ZStack {
             switch camera.status {
             case .running, .starting:
-                CameraPreview(session: camera.session, mirrored: model.project.mirrorCamera)
+                CameraPreview(session: camera.session, mirrored: model.project.mirrorCamera,
+                              zoom: model.zoom, pan: model.pan)
                 OnionSkin(model: model)
+                    .modifier(Zoomed(zoom: model.zoom, pan: model.pan))
                 if camera.status == .starting { ProgressView().controlSize(.large) }
             case .denied:
                 CameraMessage(
@@ -100,6 +125,7 @@ private struct ReviewView: View {
     var body: some View {
         if let id = model.current, let frame = model.frames.first(where: { $0.id == id }) {
             FramePicture(image: model.images.image(frame.image, data: model.document.images[frame.image]))
+                .modifier(Zoomed(zoom: model.zoom, pan: model.pan))
         }
     }
 }
@@ -117,6 +143,7 @@ private struct PlaybackView: View {
             let n = finished ? length - 1 : elapsed % length
             let frame = frames.index(atPlaybackFrame: n).map { frames[$0] }
             FramePicture(image: frame.flatMap { model.images.image($0.image, data: model.document.images[$0.image]) })
+                .modifier(Zoomed(zoom: model.zoom, pan: model.pan))
                 .onChange(of: frame?.id, initial: true) { model.playingFrame = frame?.id }
                 .onChange(of: finished) { if finished { model.stopPlayback() } }
         }
@@ -138,6 +165,9 @@ private struct ModeBadge: View {
             case .playback:
                 Image(systemName: "play.fill")
                 Text(position)
+            }
+            if model.zoom > 1 {
+                Text("· \(Int((model.zoom * 100).rounded()))%")
             }
         }
         .font(.caption.weight(.semibold).monospacedDigit())

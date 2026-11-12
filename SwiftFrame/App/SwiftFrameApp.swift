@@ -79,6 +79,18 @@ struct FrameCommands: Commands {
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(model == nil)
         }
+        CommandGroup(before: .toolbar) {
+            Button("Zoom In") { model?.zoomIn() }
+                .keyboardShortcut("=", modifiers: .command)
+                .disabled(model?.canZoomIn != true)
+            Button("Zoom Out") { model?.zoomOut() }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(model?.canZoomOut != true)
+            Button("Actual Size") { model?.actualSize() }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(model?.canZoomOut != true)
+            Divider()
+        }
         CommandGroup(after: .importExport) {
             Button("Export Movie…") { model?.exportMovie() }
                 .keyboardShortcut("e", modifiers: .command)

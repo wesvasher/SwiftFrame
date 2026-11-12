@@ -31,6 +31,12 @@ final class WindowModel: ObservableObject {
     @Published var flash = false
     @Published var exportProgress: Double?
     @Published var errorMessage: String?
+    /// How far the viewer is zoomed in, from `zoomLevels`.
+    @Published private(set) var zoom: CGFloat = 1
+    /// How far the zoomed picture is dragged from the center, in points.
+    @Published private(set) var pan: CGSize = .zero
+    /// The viewer's size, which limits how far `pan` can go.
+    var viewerSize: CGSize = .zero { didSet { setPan(pan) } }
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -114,6 +120,36 @@ final class WindowModel: ObservableObject {
             mode = current == nil ? .live : .review
         }
         playingFrame = nil
+    }
+
+    // MARK: - Zoom
+
+    static let zoomLevels: [CGFloat] = [1, 1.5, 2, 3, 4, 6, 8]
+
+    var canZoomIn: Bool { zoom < Self.zoomLevels.last! }
+    var canZoomOut: Bool { zoom > 1 }
+
+    func zoomIn() {
+        if let next = Self.zoomLevels.first(where: { $0 > zoom + 0.001 }) { setZoom(next) }
+    }
+
+    func zoomOut() {
+        if let next = Self.zoomLevels.last(where: { $0 < zoom - 0.001 }) { setZoom(next) }
+    }
+
+    func actualSize() { setZoom(1) }
+
+    private func setZoom(_ value: CGFloat) {
+        zoom = value
+        setPan(pan)
+    }
+
+    /// Moves the zoomed picture, keeping its edges at or past the viewer's.
+    func setPan(_ value: CGSize) {
+        let maxX = viewerSize.width * (zoom - 1) / 2, maxY = viewerSize.height * (zoom - 1) / 2
+        let clamped = CGSize(width: value.width.clamped(to: -maxX...maxX),
+                             height: value.height.clamped(to: -maxY...maxY))
+        if clamped != pan { pan = clamped }
     }
 
     // MARK: - Selection

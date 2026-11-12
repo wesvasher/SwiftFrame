@@ -82,6 +82,17 @@ private struct CaptureBar: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
+
+                ControlGroup {
+                    Button("Zoom Out", systemImage: "minus.magnifyingglass", action: model.zoomOut)
+                        .disabled(!model.canZoomOut)
+                        .help("Zoom out (⌘−)")
+                    Button("Zoom In", systemImage: "plus.magnifyingglass", action: model.zoomIn)
+                        .disabled(!model.canZoomIn)
+                        .help("Zoom in (⌘=)")
+                }
+                .labelStyle(.iconOnly)
+                .fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
