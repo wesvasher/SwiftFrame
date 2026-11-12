@@ -111,11 +111,18 @@ struct AppearanceSettingsView: View {
 /// Settings › General.
 struct GeneralSettingsView: View {
     @AppStorage(GeneralSettings.flashOnCaptureKey) private var flashOnCapture = true
+    @AppStorage(GeneralSettings.playheadFireKey) private var playheadFire = true
 
     var body: some View {
         Form {
             Section("Capturing") {
                 Toggle("Flash the viewer when a frame is captured", isOn: $flashOnCapture)
+            }
+            Section("Playback") {
+                Toggle("Fire trail behind the playhead", isOn: $playheadFire)
+                Text("Sparks stream off the playhead while the animation plays. Off when Reduce Motion is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -124,6 +131,7 @@ struct GeneralSettingsView: View {
 
 enum GeneralSettings {
     static let flashOnCaptureKey = "flashOnCapture"
+    static let playheadFireKey = "playheadFire"
 
     static var flashOnCapture: Bool {
         UserDefaults.standard.object(forKey: flashOnCaptureKey) as? Bool ?? true

@@ -270,6 +270,9 @@ private struct Playhead: View {
     /// the line doesn't make it jump.
     @State private var dragStart: CGFloat?
     @State private var isHovered = false
+    @State private var sparks = FireTrail.Sparks()
+    @AppStorage(GeneralSettings.playheadFireKey) private var showsFire = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let grabWidth: CGFloat = 12
     /// The line thickens while the pointer is over it, and stays thick while it's dragged.
@@ -281,8 +284,17 @@ private struct Playhead: View {
                 // Made fresh each time playback starts: a paused TimelineView
                 // doesn't always start ticking again when unpaused.
                 TimelineView(.animation) { context in
-                    line(height: proxy.size.height, x: x(at: context.date))
+                    let x = x(at: context.date)
+                    ZStack(alignment: .topLeading) {
+                        if showsFire, !reduceMotion {
+                            FireTrail(sparks: sparks, date: context.date, x: x, origin: x - FireTrail.reach)
+                                .frame(width: FireTrail.reach + FireTrail.lead, height: proxy.size.height)
+                                .offset(x: x - FireTrail.reach)
+                        }
+                        line(height: proxy.size.height, x: x)
+                    }
                 }
+                .onAppear { sparks.reset() }
             } else {
                 line(height: proxy.size.height, x: x(at: Date()))
             }
