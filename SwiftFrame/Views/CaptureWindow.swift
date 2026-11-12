@@ -283,8 +283,8 @@ private struct WindowKeyMonitor: NSViewRepresentable {
     }
 }
 
-/// A small Liquid Glass switch for the frame rate: 12, 24, or a custom rate
-/// set in a popover.
+/// A small flat switch for the frame rate: 12, 24, or a custom rate set in
+/// a popover. Rounded rectangles, no glass.
 private struct FrameRateSwitch: View {
     @ObservedObject var model: WindowModel
     @AppStorage("customFrameRate") private var lastCustom = 15
@@ -311,7 +311,8 @@ private struct FrameRateSwitch: View {
                 .popover(isPresented: $showsCustom, arrowEdge: .top) { customEditor }
         }
         .padding(3)
-        .glassEffect(.regular.interactive(), in: .capsule)
+        .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator, lineWidth: 0.5))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: choice)
         .help("Frames per second: 12, 24, or … for a custom rate")
         .accessibilityElement(children: .contain)
@@ -330,12 +331,12 @@ private struct FrameRateSwitch: View {
                 .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                 .background {
                     if isSelected {
-                        Capsule()
+                        RoundedRectangle(cornerRadius: 6)
                             .fill(Color.accentColor)
                             .matchedGeometryEffect(id: "selected", in: selection)
                     }
                 }
-                .contentShape(.capsule)
+                .contentShape(.rect(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
