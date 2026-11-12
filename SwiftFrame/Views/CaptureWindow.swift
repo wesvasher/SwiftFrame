@@ -169,14 +169,6 @@ private struct WindowToolbar: ToolbarContent {
         }
 
         ToolbarItemGroup {
-            Picker("Frame Rate", selection: Binding(get: { model.project.framesPerSecond }, set: model.setFrameRate)) {
-                ForEach(Project.frameRates, id: \.self) { Text("\($0) fps").tag($0) }
-            }
-            .fixedSize()
-            .help("Frames per second")
-
-            OnionSkinButton(model: model)
-
             Toggle(isOn: Binding(get: { model.project.loopPlayback }, set: model.setLoop)) {
                 Label("Loop", systemImage: "repeat")
             }
@@ -203,36 +195,6 @@ private struct WindowToolbar: ToolbarContent {
 
     private var cameraName: String {
         camera.devices.first { $0.id == camera.deviceID }?.name ?? "Camera"
-    }
-}
-
-private struct OnionSkinButton: View {
-    @ObservedObject var model: WindowModel
-    @State private var isShown = false
-
-    var body: some View {
-        Button {
-            isShown.toggle()
-        } label: {
-            Label("Onion Skin", systemImage: "square.stack.3d.down.forward")
-        }
-        .help("Onion skin: earlier frames over the live camera")
-        .popover(isPresented: $isShown, arrowEdge: .bottom) {
-            Form {
-                Stepper(value: Binding(get: { model.project.onionSkinFrames }, set: model.setOnionSkinFrames),
-                        in: 0...5) {
-                    LabeledContent("Frames", value: model.project.onionSkinFrames == 0
-                                   ? "Off" : "\(model.project.onionSkinFrames)")
-                }
-                Slider(value: Binding(get: { model.project.onionSkinOpacity }, set: model.setOnionSkinOpacity),
-                       in: 0.05...0.9) {
-                    Text("Opacity")
-                }
-                .disabled(model.project.onionSkinFrames == 0)
-            }
-            .formStyle(.grouped)
-            .frame(width: 280)
-        }
     }
 }
 
