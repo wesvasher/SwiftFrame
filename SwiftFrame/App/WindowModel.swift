@@ -104,7 +104,15 @@ final class WindowModel: ObservableObject {
         if mode == .playback {
             stopPlayback()
         } else if !frames.isEmpty {
-            playbackStart = Date()
+            // Resume from the frame being looked at (where playback was
+            // paused), or start over from live or the last frame.
+            var startIndex = 0
+            if mode == .review, let id = current, let index = frames.firstIndex(of: id), index < frames.count - 1 {
+                startIndex = index
+            }
+            let fps = Double(max(project.framesPerSecond, 1))
+            let offset = Double(frames.playbackStart(ofIndex: startIndex)) / fps
+            playbackStart = Date().addingTimeInterval(-offset)
             mode = .playback
         }
     }

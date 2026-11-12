@@ -40,11 +40,12 @@ struct FrameCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Frame") {
+            // Tapping ⌘ on its own also captures (CommandTapMonitor); menus
+            // can't show a lone modifier as a shortcut.
             Button("Capture Frame") { model?.capture() }
-                .keyboardShortcut(.space, modifiers: [])
                 .disabled(model?.canCapture != true)
-            Button(model?.mode == .playback ? "Stop Playback" : "Play") { model?.togglePlayback() }
-                .keyboardShortcut(.return, modifiers: [])
+            Button(model?.mode == .playback ? "Pause" : "Play") { model?.togglePlayback() }
+                .keyboardShortcut(.space, modifiers: [])
                 .disabled(model?.frames.isEmpty ?? true)
             Button("Go Live") { model?.goLive() }
                 .keyboardShortcut("l", modifiers: .command)

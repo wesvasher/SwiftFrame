@@ -39,6 +39,7 @@ struct CaptureWindow: View {
         }
         .toolbar { WindowToolbar(model: model) }
         .focusedSceneObject(model)
+        .background(CommandTapMonitor { model.capture() })
         .task { await model.startCamera() }
         .onAppear {
             model.undoManager = undoManager
@@ -83,7 +84,7 @@ private struct CaptureBar: View {
             }
             .buttonStyle(.plain)
             .disabled(!model.canCapture)
-            .help("Capture a frame (Space)")
+            .help("Capture a frame (tap ⌘)")
 
             HStack(spacing: 8) {
                 if let progress = model.exportProgress {
@@ -184,11 +185,11 @@ private struct WindowToolbar: ToolbarContent {
             Button {
                 model.togglePlayback()
             } label: {
-                Label(model.mode == .playback ? "Stop" : "Play",
-                      systemImage: model.mode == .playback ? "stop.fill" : "play.fill")
+                Label(model.mode == .playback ? "Pause" : "Play",
+                      systemImage: model.mode == .playback ? "pause.fill" : "play.fill")
             }
             .disabled(model.frames.isEmpty)
-            .help("Play the animation (Return)")
+            .help("Play or pause the animation (Space)")
 
             Button {
                 model.exportMovie()
@@ -231,6 +232,69 @@ private struct OnionSkinButton: View {
             }
             .formStyle(.grouped)
             .frame(width: 280)
+        }
+    }
+}
+
+/// Calls `action` when either Command key is tapped on its own in this
+/// window: pressed and released with no other key, modifier or click in
+/// between, so ⌘-shortcuts and ⌘-click don't count.
+private struct CommandTapMonitor: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> MonitorView {
+        let view = MonitorView()
+        view.action = action
+        return view
+    }
+
+    func updateNSView(_ view: MonitorView, context: Context) {
+        view.action = action
+    }
+
+    final class MonitorView: NSView {
+        var action: () -> Void = {}
+        private var monitor: Any?
+        private var armed = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            guard window != nil else { return }
+            let mask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown, .leftMouseDown, .rightMouseDown,
+                                               .otherMouseDown, .scrollWheel]
+            monitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+                self?.handle(event)
+                return event
+            }
+        }
+
+        private func handle(_ event: NSEvent) {
+            guard event.window === window, window?.isKeyWindow == true else {
+                armed = false
+                return
+            }
+            guard event.type == .flagsChanged else {
+                armed = false
+                return
+            }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                .subtracting([.capsLock, .numericPad, .function])
+            if flags == .command {
+                armed = true
+            } else if flags.isEmpty, armed {
+                armed = false
+                action()
+            } else {
+                armed = false
+            }
+        }
+
+        override func removeFromSuperview() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            super.removeFromSuperview()
         }
     }
 }

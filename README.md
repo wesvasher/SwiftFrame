@@ -8,9 +8,9 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 
 ## Features
 
-- **Live capture**: pick any connected camera (built-in, USB, or Continuity Camera), mirror it if you like, and press Space to capture a frame.
+- **Live capture**: pick any connected camera (built-in, USB, or Continuity Camera), mirror it if you like, and tap ⌘ to capture a frame.
 - **Onion skin**: show up to five earlier frames over the live camera, fading with age, at the opacity you choose.
-- **Real-time preview**: press Return to play the animation at 6–30 fps, looping or once, with the playing frame shown in the filmstrip.
+- **Real-time preview**: press Space to play and pause the animation at 6–30 fps, looping or once, with the playing frame shown in the filmstrip.
 - **Frame editing**: click a frame to review it. Shift- or Command-click to select more, drag to reorder, and duplicate, delete, reverse, or hold frames for longer (×2 for shooting "on twos"). Every edit can be undone.
 - **Back to capturing**: click Live at the end of the filmstrip, press → past the last frame, or press ⌘L.
 - **Import pictures**: drop image files onto the filmstrip, or use Frame → Add Pictures.
@@ -21,8 +21,8 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 
 | Key | Action |
 | --- | --- |
-| Space | Capture a frame |
-| Return | Play / stop |
+| ⌘ (tap on its own) | Capture a frame |
+| Space | Play / pause |
 | ← → | Previous / next frame (→ past the end goes live) |
 | ⌘L | Go live |
 | ⌘D | Duplicate selected frames |
