@@ -7,59 +7,169 @@ import UniformTypeIdentifiers
 /// to add them.
 struct FilmstripView: View {
     @ObservedObject var model: WindowModel
+    @State private var scrollPosition = ScrollPosition(edge: .leading)
+    /// The scroll view's offset, content width and visible width.
+    @State private var scrollX: CGFloat = 0
+    @State private var contentWidth: CGFloat = 0
+    @State private var visibleWidth: CGFloat = 0
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: FilmstripLayout.spacing(model.thumbnailWidth)) {
-                    ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
-                        FrameCell(model: model, frame: frame, number: index + 1)
-                            .id(frame.id)
-                    }
-                    // Room for the pinned Capture tile, so the last frame can
-                    // scroll out from under it. Dropping here moves to the end.
-                    EndSpace(model: model).id(Self.liveID)
-                }
-                .padding(.horizontal, FilmstripLayout.inset)
-                .padding(.top, FilmstripLayout.scrubHeight)
-                .padding(.bottom, 8)
-                .overlay(alignment: .top) {
-                    if !model.frames.isEmpty { ScrubStrip(model: model) }
-                }
-                .overlay(alignment: .topLeading) {
-                    if !model.frames.isEmpty { Playhead(model: model) }
-                }
-                .coordinateSpace(.named(FilmstripLayout.space))
-            }
-            .scrollIndicators(.visible)
-            .overlay(alignment: .trailing) {
-                CaptureTile(model: model)
-                    .padding(.top, FilmstripLayout.scrubHeight)
-                    .padding(.bottom, 8)
+        VStack(spacing: 0) {
+            if isZoomedIn {
+                navigator
                     .padding(.horizontal, FilmstripLayout.inset)
-                    .frame(maxHeight: .infinity)
-                    .background(.bar)
-                    .overlay(alignment: .leading) { Divider() }
-                    .shadow(color: .black.opacity(0.12), radius: 6, x: -3)
+                    .padding(.top, 6)
+                    .transition(.opacity)
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.filmstripVisibleWidth = $0 }
-            .onChange(of: model.frames.count) { old, new in
-                if new > old, model.mode == .live { withAnimation { proxy.scrollTo(Self.liveID, anchor: .trailing) } }
-            }
-            .onChange(of: model.mode == .playback ? model.playingFrame : model.current) { _, id in
-                if let id { proxy.scrollTo(id) }
-            }
-            .onChange(of: model.thumbnailWidth) {
-                // Keep the frame being looked at in view after zooming.
-                if let id = model.current { proxy.scrollTo(id, anchor: .center) }
-                else { proxy.scrollTo(Self.liveID, anchor: .trailing) }
-            }
+            strip
         }
-        .frame(height: FrameCell.height + FilmstripLayout.scrubHeight + 8)
+        .animation(.easeOut(duration: 0.15), value: isZoomedIn)
         .background(.bar)
     }
 
-    static let liveID = "live"
+    private var strip: some View {
+        ScrollView(.horizontal) {
+            FilmstripContent(model: model)
+        }
+        .scrollIndicators(.visible)
+        .scrollPosition($scrollPosition)
+        .onScrollGeometryChange(for: [CGFloat].self) {
+            [$0.contentOffset.x, $0.contentSize.width, $0.containerSize.width]
+        } action: { _, new in
+            scrollX = new[0]
+            contentWidth = new[1]
+            visibleWidth = new[2]
+            model.filmstripVisibleWidth = new[2]
+        }
+        .overlay(alignment: .trailing) {
+            CaptureTile(model: model)
+                .padding(.top, FilmstripLayout.scrubHeight)
+                .padding(.bottom, 8)
+                .padding(.horizontal, FilmstripLayout.inset)
+                .frame(maxHeight: .infinity)
+                .background(.bar)
+                .overlay(alignment: .leading) { Divider() }
+                .shadow(color: .black.opacity(0.12), radius: 6, x: -3)
+        }
+        .onChange(of: model.frames.count) { old, new in
+            if new > old, model.mode == .live { withAnimation { scrollPosition.scrollTo(edge: .trailing) } }
+        }
+        .onChange(of: model.mode == .playback ? model.playingFrame : model.current) { _, id in
+            if let id, !isInView(id) { scrollPosition.scrollTo(id: id, anchor: .center) }
+        }
+        .onChange(of: model.thumbnailWidth) {
+            // Keep the frame being looked at in view after zooming.
+            if let id = model.current { scrollPosition.scrollTo(id: id, anchor: .center) }
+            else { scrollPosition.scrollTo(edge: .trailing) }
+        }
+        .frame(height: FrameCell.height + FilmstripLayout.scrubHeight + 8)
+    }
+
+    /// The width the frames can be seen in: the scroll view less the Capture tile.
+    private var unobscuredWidth: CGFloat { max(0, visibleWidth - FilmstripLayout.endSpaceWidth - FilmstripLayout.inset) }
+
+    /// Whether the frames run past the visible width (so the strip scrolls).
+    private var isZoomedIn: Bool {
+        !model.frames.isEmpty && visibleWidth > 0 && contentWidth > visibleWidth + 1
+    }
+
+    private func isInView(_ id: UUID) -> Bool {
+        guard let index = model.frames.firstIndex(of: id) else { return true }
+        let x = FilmstripLayout.cellX(index, thumbnailWidth: model.thumbnailWidth)
+        return x >= scrollX && x + FilmstripLayout.stride(model.thumbnailWidth) <= scrollX + unobscuredWidth
+    }
+
+    /// SwiftCut's zoom navigator: the whole timeline in miniature, with the
+    /// part in view outlined. Drag the box to scroll; click elsewhere to jump.
+    private var navigator: some View {
+        let width = model.thumbnailWidth
+        return StripNavigator(
+            contentWidth: contentWidth,
+            visible: scrollX...(scrollX + max(1, unobscuredWidth)),
+            playheadX: playheadX,
+            scroll: { left in
+                scrollX = left
+                scrollPosition.scrollTo(x: left)
+            },
+            close: { model.zoomTimelineToFit() }
+        ) { mapWidth in
+            let scale = mapWidth / max(1, contentWidth)
+            NavigatorOverview(model: model, scale: scale, thumbnailWidth: width)
+        }
+    }
+
+    /// The playhead's place along the strip, for the navigator.
+    private var playheadX: CGFloat? {
+        let width = model.thumbnailWidth
+        let index: Int?
+        if model.mode == .playback, let id = model.playingFrame {
+            index = model.frames.firstIndex(of: id)
+        } else if model.mode == .review, let id = model.current {
+            index = model.frames.firstIndex(of: id)
+        } else {
+            return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width)
+        }
+        return index.map { FilmstripLayout.cellX($0, thumbnailWidth: width) + FilmstripLayout.stride(width) / 2 }
+    }
+}
+
+/// The frames in miniature for the navigator. Long animations draw a
+/// picture for only some frames, so the overview stays quick.
+private struct NavigatorOverview: View {
+    @ObservedObject var model: WindowModel
+    let scale: CGFloat
+    let thumbnailWidth: CGFloat
+
+    var body: some View {
+        let frames = model.frames
+        let cellWidth = max(1, thumbnailWidth * scale)
+        // About one picture per 8 points of navigator.
+        let step = max(1, Int((8 / max(cellWidth, 0.1)).rounded(.up)))
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(.quaternary.opacity(0.5))
+            ForEach(Array(Swift.stride(from: 0, to: frames.count, by: step)), id: \.self) { index in
+                let frame = frames[index]
+                let x = FilmstripLayout.cellX(index, thumbnailWidth: thumbnailWidth) * scale
+                ZStack {
+                    Color.black
+                    FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
+                        .scaledToFill()
+                }
+                .frame(width: max(1, cellWidth * CGFloat(step) - (step == 1 ? 1 : 0)))
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 2))
+                .offset(x: x)
+            }
+        }
+    }
+}
+
+/// The frames, then room for the pinned Capture tile, with the scrub strip
+/// and playhead over them.
+struct FilmstripContent: View {
+    @ObservedObject var model: WindowModel
+
+    var body: some View {
+        LazyHStack(spacing: FilmstripLayout.spacing(model.thumbnailWidth)) {
+            ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
+                FrameCell(model: model, frame: frame, number: index + 1)
+                    .id(frame.id)
+            }
+            // Room for the pinned Capture tile, so the last frame can scroll
+            // out from under it. Dropping here moves to the end.
+            EndSpace(model: model)
+        }
+        .padding(.leading, FilmstripLayout.inset)
+        .padding(.top, FilmstripLayout.scrubHeight)
+        .padding(.bottom, 8)
+        .overlay(alignment: .top) {
+            if !model.frames.isEmpty { ScrubStrip(model: model) }
+        }
+        .overlay(alignment: .topLeading) {
+            if !model.frames.isEmpty { Playhead(model: model) }
+        }
+        .coordinateSpace(.named(FilmstripLayout.space))
+    }
 }
 
 /// Where things sit along the filmstrip. Every frame cell is the same width,
@@ -71,6 +181,10 @@ enum FilmstripLayout {
     static let compactWidth: CGFloat = 24
     /// The Capture tile's width, padding included; it never zooms.
     static let liveCellWidth: CGFloat = 112 + 8   // FrameCell.standardWidth + padding
+    /// The space after the last frame: exactly what the pinned Capture tile
+    /// covers (the tile and its inset on both sides), so the last frame and
+    /// the live playhead are never hidden under it.
+    static let endSpaceWidth: CGFloat = liveCellWidth + inset * 2
 
     /// The gap between cells and each cell's padding around its thumbnail
     /// (the selection color shows in the padding): 5 points between pictures.
@@ -98,7 +212,7 @@ enum FilmstripLayout {
     /// Capture tile all fit in `visibleWidth`.
     static func fitWidth(count: Int, visibleWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
         guard count > 0 else { return maxWidth }
-        let available = visibleWidth - inset * 2 - liveCellWidth
+        let available = visibleWidth - inset - endSpaceWidth
         let perFrame = available / CGFloat(count)
         // Full padding and gaps above the compact width…
         let full = padding * 2 + gap
@@ -193,8 +307,9 @@ private struct Playhead: View {
         if model.mode == .review, let id = model.current, let index = model.frames.firstIndex(of: id) {
             return FilmstripLayout.cellX(index, thumbnailWidth: width) + inside + width / 2
         }
-        // Live: just after the last frame, where the next capture goes.
-        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width) + 2
+        // Live: in the gap after the last frame, where the next capture goes.
+        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width)
+            - FilmstripLayout.spacing(width) / 2
     }
 
     private var drag: some Gesture {
@@ -311,7 +426,7 @@ private struct EndSpace: View {
 
     var body: some View {
         Color.clear
-            .frame(width: FilmstripLayout.liveCellWidth, height: FrameCell.height)
+            .frame(width: FilmstripLayout.endSpaceWidth, height: FrameCell.height)
             .overlay(alignment: .leading) {
                 if isTargeted { Capsule().fill(Color.accentColor).frame(width: 3).offset(x: -2) }
             }

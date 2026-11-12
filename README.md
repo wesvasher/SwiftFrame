@@ -12,6 +12,7 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 - **Onion skin**: show up to five earlier frames over the live camera, fading with age, at the opacity you choose.
 - **Real-time preview**: press Space to play and pause the animation at 12 or 24 fps, or any custom rate from 1 to 60, chosen with the switch on the capture bar, looping or once, with the playing frame shown in the filmstrip.
 - **Frame editing**: click a frame to review it. Shift- or Command-click to select more, drag a frame by its handle to reorder, right-click for more, and duplicate, delete, reverse, or hold frames for longer (×2 for shooting "on twos"). Every edit can be undone.
+- **Navigator**: when the timeline is zoomed in, a miniature of every frame above it outlines the part in view. Drag the box to move along the timeline, or click to jump.
 - **Playhead**: a line across the filmstrip at the frame showing, gliding along while it plays. Drag it, or click or drag in the strip above the frames, to scrub; past the last frame is the live camera.
 - **Back to capturing**: click the Capture tile at the right of the timeline, press → past the last frame, or press ⌘L.
 - **Import pictures**: drop image files onto the filmstrip, or use Frame → Add Pictures.

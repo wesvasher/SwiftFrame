@@ -104,7 +104,7 @@ import Testing
 
 @Suite struct FitZoomTests {
     func totalWidth(_ count: Int, _ width: CGFloat) -> CGFloat {
-        FilmstripLayout.cellX(count, thumbnailWidth: width) + FilmstripLayout.liveCellWidth + FilmstripLayout.inset
+        FilmstripLayout.cellX(count, thumbnailWidth: width) + FilmstripLayout.endSpaceWidth
     }
 
     @Test(arguments: [1, 5, 40, 120, 400])
