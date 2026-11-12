@@ -304,39 +304,42 @@ private struct FrameRateSwitch: View {
     }
 
     var body: some View {
-        HStack(spacing: 3) {
-            segment(.twelve, "12")
-            segment(.twentyFour, "24")
-            segment(.custom, choice == .custom ? "\(model.project.framesPerSecond)" : "…")
+        HStack(spacing: 2) {
+            segment(.twelve, Text("12"))
+            segment(.twentyFour, Text("24"))
+            // The symbol's dots sit centered (a typed "…" sits on the baseline), drawn heavier.
+            segment(.custom, choice == .custom
+                    ? Text("\(model.project.framesPerSecond)")
+                    : Text(Image(systemName: "ellipsis")).fontWeight(.black))
                 .popover(isPresented: $showsCustom, arrowEdge: .top) { customEditor }
         }
-        .padding(3)
-        .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator, lineWidth: 0.5))
+        .padding(2)
+        .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.separator, lineWidth: 0.5))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: choice)
         .help("Frames per second: 12, 24, or … for a custom rate")
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Frame rate")
     }
 
-    private func segment(_ value: Choice, _ title: String) -> some View {
+    private func segment(_ value: Choice, _ title: Text) -> some View {
         let isSelected = choice == value
         return Button {
             choose(value)
         } label: {
-            Text(title)
-                .font(.callout.weight(.semibold).monospacedDigit())
-                .padding(.horizontal, 12)
-                .frame(minWidth: 40, minHeight: 26)
+            title
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .padding(.horizontal, 8)
+                .frame(minWidth: 30, minHeight: 20)
                 .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                 .background {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 5)
                             .fill(Color.accentColor)
                             .matchedGeometryEffect(id: "selected", in: selection)
                     }
                 }
-                .contentShape(.rect(cornerRadius: 6))
+                .contentShape(.rect(cornerRadius: 5))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
