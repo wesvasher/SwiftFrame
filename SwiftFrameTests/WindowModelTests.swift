@@ -50,3 +50,40 @@ import Testing
         #expect(abs(Date().timeIntervalSince(model.playbackStart)) < 0.05)
     }
 }
+
+@MainActor @Suite struct PlayheadTests {
+    @Test func playbackPositionCountsHolds() {
+        var project = Project()
+        project.framesPerSecond = 10
+        project.loopPlayback = false
+        project.frames = [Frame(image: UUID()), Frame(image: UUID(), hold: 4)]
+        let model = WindowModel(document: StopMotionDocument(project: project, images: [:]))
+        let start = model.playbackStart
+
+        let first = model.playbackPosition(at: start.addingTimeInterval(0.05))
+        #expect(first?.index == 0 && abs((first?.fraction ?? 0) - 0.5) < 0.01)
+        // 0.3 s in: two playback frames into the second frame's hold of four.
+        let held = model.playbackPosition(at: start.addingTimeInterval(0.3))
+        #expect(held?.index == 1 && abs((held?.fraction ?? 0) - 0.5) < 0.01)
+        let end = model.playbackPosition(at: start.addingTimeInterval(2))
+        #expect(end?.index == 1 && end?.finished == true)
+    }
+
+    @Test func scrubSelectsFramesAndGoesLivePastTheEnd() {
+        var project = Project()
+        project.frames = (0..<3).map { _ in Frame(image: UUID()) }
+        let model = WindowModel(document: StopMotionDocument(project: project, images: [:]))
+        model.scrub(toIndex: 1)
+        #expect(model.mode == .review && model.current == model.frames[1].id)
+        model.scrub(toIndex: 3)
+        #expect(model.mode == .live && model.current == nil)
+    }
+
+    @Test func layoutFindsTheCellUnderAPoint() {
+        let width: CGFloat = 112   // stride 124, first cell at 10
+        #expect(FilmstripLayout.index(at: 0, thumbnailWidth: width) == 0)
+        #expect(FilmstripLayout.index(at: 130, thumbnailWidth: width) == 0)
+        #expect(FilmstripLayout.index(at: 140, thumbnailWidth: width) == 1)
+        #expect(FilmstripLayout.cellX(2, thumbnailWidth: width) == 258)
+    }
+}

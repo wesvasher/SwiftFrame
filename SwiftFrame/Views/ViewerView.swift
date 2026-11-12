@@ -109,13 +109,9 @@ private struct PlaybackView: View {
 
     var body: some View {
         TimelineView(.animation) { context in
-            let frames = model.frames
-            let length = max(frames.playbackLength, 1)
-            let fps = Double(max(model.project.framesPerSecond, 1))
-            let elapsed = Int(context.date.timeIntervalSince(model.playbackStart) * fps)
-            let finished = !model.project.loopPlayback && elapsed >= length
-            let n = finished ? length - 1 : elapsed % length
-            let frame = frames.index(atPlaybackFrame: n).map { frames[$0] }
+            let position = model.playbackPosition(at: context.date)
+            let finished = position?.finished ?? true
+            let frame = position.map { model.frames[$0.index] }
             FramePicture(image: frame.flatMap { model.images.image($0.image, data: model.document.images[$0.image]) })
                 .onChange(of: frame?.id, initial: true) { model.playingFrame = frame?.id }
                 .onChange(of: finished) { if finished { model.stopPlayback() } }

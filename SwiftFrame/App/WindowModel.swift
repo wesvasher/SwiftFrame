@@ -85,6 +85,7 @@ final class WindowModel: ObservableObject {
         selection = []
         current = nil
         mode = .live
+        guard GeneralSettings.flashOnCapture else { return }
         flash = true
         Task {
             try? await Task.sleep(for: .milliseconds(120))
@@ -115,6 +116,35 @@ final class WindowModel: ObservableObject {
             playbackStart = Date().addingTimeInterval(-offset)
             mode = .playback
         }
+    }
+
+    /// Where playback is at `date`: the frame showing, how far through its
+    /// hold (0 to 1), and whether a non-looping playback has reached the end.
+    func playbackPosition(at date: Date) -> (index: Int, fraction: Double, finished: Bool)? {
+        let length = frames.playbackLength
+        guard length > 0 else { return nil }
+        let fps = Double(max(project.framesPerSecond, 1))
+        let t = max(0, date.timeIntervalSince(playbackStart) * fps)
+        let finished = !project.loopPlayback && t >= Double(length)
+        let position = finished ? Double(length) - 0.001 : t.truncatingRemainder(dividingBy: Double(length))
+        guard let index = frames.index(atPlaybackFrame: Int(position)) else { return nil }
+        let start = Double(frames.playbackStart(ofIndex: index))
+        let fraction = (position - start) / Double(frames[index].hold)
+        return (index, min(max(fraction, 0), 1), finished)
+    }
+
+    /// Moves the playhead to a frame: pauses playback and shows that frame.
+    /// Past the last frame is the live camera.
+    func scrub(toIndex index: Int) {
+        guard !frames.isEmpty else { return }
+        if index >= frames.count {
+            if mode != .live { goLive() }
+            return
+        }
+        let id = frames[min(max(index, 0), frames.count - 1)].id
+        playingFrame = nil
+        guard current != id || mode != .review else { return }
+        select(id)
     }
 
     func stopPlayback() {

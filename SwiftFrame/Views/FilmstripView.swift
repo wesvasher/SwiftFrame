@@ -10,15 +10,23 @@ struct FilmstripView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                LazyHStack(spacing: 4) {
+                LazyHStack(spacing: FilmstripLayout.spacing) {
                     ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
                         FrameCell(model: model, frame: frame, number: index + 1)
                             .id(frame.id)
                     }
                     LiveCell(model: model).id(Self.liveID)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, FilmstripLayout.inset)
+                .padding(.top, FilmstripLayout.scrubHeight)
+                .padding(.bottom, 8)
+                .overlay(alignment: .top) {
+                    if !model.frames.isEmpty { ScrubStrip(model: model) }
+                }
+                .overlay(alignment: .topLeading) {
+                    if !model.frames.isEmpty { Playhead(model: model) }
+                }
+                .coordinateSpace(.named(FilmstripLayout.space))
             }
             .scrollIndicators(.visible)
             .onChange(of: model.frames.count) { old, new in
@@ -33,11 +41,125 @@ struct FilmstripView: View {
                 else { proxy.scrollTo(Self.liveID, anchor: .trailing) }
             }
         }
-        .frame(height: FrameCell.height + 16)
+        .frame(height: FrameCell.height + FilmstripLayout.scrubHeight + 8)
         .background(.bar)
     }
 
     static let liveID = "live"
+}
+
+/// Where things sit along the filmstrip. Every frame cell is the same width,
+/// so positions are simple arithmetic.
+enum FilmstripLayout {
+    static let inset: CGFloat = 10
+    static let spacing: CGFloat = 4
+    /// The cell's padding on each side of its thumbnail.
+    static let cellPadding: CGFloat = 4
+    /// The strip above the frames that moves the playhead.
+    static let scrubHeight: CGFloat = 18
+    static let space = "filmstrip"
+
+    static func stride(_ thumbnailWidth: CGFloat) -> CGFloat { thumbnailWidth + cellPadding * 2 + spacing }
+
+    /// The left edge of the cell at `index` (`frames.count` is the Live tile).
+    static func cellX(_ index: Int, thumbnailWidth: CGFloat) -> CGFloat {
+        inset + CGFloat(index) * stride(thumbnailWidth)
+    }
+
+    /// The cell under `x`; `frames.count` or more is the Live tile.
+    static func index(at x: CGFloat, thumbnailWidth: CGFloat) -> Int {
+        max(0, Int(((x - inset + spacing / 2) / stride(thumbnailWidth)).rounded(.down)))
+    }
+}
+
+/// The strip above the frames: click or drag in it to move the playhead.
+/// (Clicking a frame only selects it.)
+private struct ScrubStrip: View {
+    @ObservedObject var model: WindowModel
+
+    var body: some View {
+        Rectangle()
+            .fill(.clear)
+            .frame(height: FilmstripLayout.scrubHeight)
+            .frame(maxWidth: .infinity)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named(FilmstripLayout.space))
+                    .onChanged { value in
+                        model.scrub(toIndex: FilmstripLayout.index(at: value.location.x,
+                                                                   thumbnailWidth: model.thumbnailWidth))
+                    }
+            )
+            .help("Click or drag here to move the playhead")
+            .accessibilityElement()
+            .accessibilityLabel("Playhead")
+            .accessibilityAdjustableAction { direction in model.step(direction == .increment ? 1 : -1) }
+    }
+}
+
+/// A tall line across the filmstrip at the frame showing, like SwiftCut's
+/// timeline playhead. It glides through each frame while playing and sits on
+/// the middle of the frame otherwise. Drag it to scrub; the grab area is a few
+/// points either side of the line, so clicks farther away still select the
+/// frame underneath.
+private struct Playhead: View {
+    @ObservedObject var model: WindowModel
+    @Environment(\.colorScheme) private var colorScheme
+    /// Where the playhead was when a drag began, so grabbing it slightly off
+    /// the line doesn't make it jump.
+    @State private var dragStart: CGFloat?
+    @State private var isHovered = false
+
+    private let grabWidth: CGFloat = 12
+    /// The line thickens while the pointer is over it, and stays thick while it's dragged.
+    private var isActive: Bool { isHovered || dragStart != nil }
+
+    var body: some View {
+        GeometryReader { proxy in
+            TimelineView(.animation(paused: model.mode != .playback)) { context in
+                ZStack {
+                    Color.clear
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(colorScheme == .dark ? Color.white : Color.black)
+                        .shadow(radius: 2)
+                        .frame(width: isActive ? 4 : 2)
+                        // Faint while thin, so it doesn't hide the pictures; full strength when grabbed.
+                        .opacity(isActive ? 1 : 0.35)
+                }
+                .animation(.easeOut(duration: 0.12), value: isActive)
+                .frame(width: grabWidth, height: proxy.size.height - 4)
+                .contentShape(.rect)
+                .offset(x: x(at: context.date) - grabWidth / 2, y: 2)
+                .gesture(drag)
+                .onHover { isHovered = $0 }
+                .help("Drag to move the playhead")
+            }
+        }
+    }
+
+    private func x(at date: Date) -> CGFloat {
+        let width = model.thumbnailWidth
+        let inside = FilmstripLayout.cellPadding
+        if model.mode == .playback, let position = model.playbackPosition(at: date) {
+            return FilmstripLayout.cellX(position.index, thumbnailWidth: width) + inside + width * position.fraction
+        }
+        if model.mode == .review, let id = model.current, let index = model.frames.firstIndex(of: id) {
+            return FilmstripLayout.cellX(index, thumbnailWidth: width) + inside + width / 2
+        }
+        // Live: the middle of the Live tile.
+        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width) + inside + FrameCell.standardWidth / 2
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(FilmstripLayout.space))
+            .onChanged { value in
+                let start = dragStart ?? x(at: Date())
+                dragStart = start
+                model.scrub(toIndex: FilmstripLayout.index(at: start + value.translation.width,
+                                                           thumbnailWidth: model.thumbnailWidth))
+            }
+            .onEnded { _ in dragStart = nil }
+    }
 }
 
 private struct FrameCell: View {
