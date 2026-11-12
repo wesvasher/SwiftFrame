@@ -39,7 +39,7 @@ struct CaptureWindow: View {
         }
         .toolbar { WindowToolbar(model: model) }
         .focusedSceneObject(model)
-        .background(CommandTapMonitor { model.capture() })
+        .background(WindowKeyMonitor(onSpace: { model.togglePlayback() }, onCommandTap: { model.capture() }))
         .task { await model.startCamera() }
         .onAppear {
             model.undoManager = undoManager
@@ -199,26 +199,35 @@ private struct WindowToolbar: ToolbarContent {
     }
 }
 
-/// Calls `action` when either Command key is tapped on its own in this
-/// window: pressed and released with no other key, modifier or click in
-/// between, so ⌘-shortcuts and ⌘-click don't count.
-private struct CommandTapMonitor: NSViewRepresentable {
-    let action: () -> Void
+/// Window-wide keys that must work wherever keyboard focus is (the sidebar
+/// list or a focused button would otherwise take them):
+/// - Space calls `onSpace` (play/pause), unless a text field is being typed in.
+/// - Tapping either Command key on its own calls `onCommandTap` (capture):
+///   pressed and released with no other key, modifier or click in between,
+///   so ⌘-shortcuts and ⌘-click don't count.
+private struct WindowKeyMonitor: NSViewRepresentable {
+    let onSpace: () -> Void
+    let onCommandTap: () -> Void
 
     func makeNSView(context: Context) -> MonitorView {
         let view = MonitorView()
-        view.action = action
+        view.onSpace = onSpace
+        view.onCommandTap = onCommandTap
         return view
     }
 
     func updateNSView(_ view: MonitorView, context: Context) {
-        view.action = action
+        view.onSpace = onSpace
+        view.onCommandTap = onCommandTap
     }
 
     final class MonitorView: NSView {
-        var action: () -> Void = {}
+        var onSpace: () -> Void = {}
+        var onCommandTap: () -> Void = {}
         private var monitor: Any?
         private var armed = false
+
+        static let spaceKeyCode: UInt16 = 49
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -228,29 +237,41 @@ private struct CommandTapMonitor: NSViewRepresentable {
             let mask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown, .leftMouseDown, .rightMouseDown,
                                                .otherMouseDown, .scrollWheel]
             monitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
-                self?.handle(event)
-                return event
+                guard let self else { return event }
+                return self.handle(event) ? nil : event
             }
         }
 
-        private func handle(_ event: NSEvent) {
+        /// Returns true when the event was used up.
+        private func handle(_ event: NSEvent) -> Bool {
             guard event.window === window, window?.isKeyWindow == true else {
                 armed = false
-                return
+                return false
             }
-            guard event.type == .flagsChanged else {
+            switch event.type {
+            case .keyDown:
                 armed = false
-                return
-            }
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                .subtracting([.capsLock, .numericPad, .function])
-            if flags == .command {
-                armed = true
-            } else if flags.isEmpty, armed {
+                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                    .subtracting([.capsLock, .numericPad, .function])
+                guard event.keyCode == Self.spaceKeyCode, flags.isEmpty,
+                      !(window?.firstResponder is NSText) else { return false }
+                if !event.isARepeat { onSpace() }
+                return true
+            case .flagsChanged:
+                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                    .subtracting([.capsLock, .numericPad, .function])
+                if flags == .command {
+                    armed = true
+                } else if flags.isEmpty, armed {
+                    armed = false
+                    onCommandTap()
+                } else {
+                    armed = false
+                }
+                return false
+            default:
                 armed = false
-                action()
-            } else {
-                armed = false
+                return false
             }
         }
 
@@ -283,16 +304,16 @@ private struct FrameRateSwitch: View {
     }
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             segment(.twelve, "12")
             segment(.twentyFour, "24")
-            segment(.custom, choice == .custom ? "\(model.project.framesPerSecond)" : "Custom")
+            segment(.custom, choice == .custom ? "\(model.project.framesPerSecond)" : "…")
                 .popover(isPresented: $showsCustom, arrowEdge: .top) { customEditor }
         }
-        .padding(2)
+        .padding(3)
         .glassEffect(.regular.interactive(), in: .capsule)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: choice)
-        .help("Frames per second")
+        .help("Frames per second: 12, 24, or … for a custom rate")
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Frame rate")
     }
@@ -303,9 +324,9 @@ private struct FrameRateSwitch: View {
             choose(value)
         } label: {
             Text(title)
-                .font(.caption.weight(.semibold).monospacedDigit())
-                .padding(.horizontal, 9)
-                .frame(minWidth: 30, minHeight: 20)
+                .font(.callout.weight(.semibold).monospacedDigit())
+                .padding(.horizontal, 12)
+                .frame(minWidth: 40, minHeight: 26)
                 .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                 .background {
                     if isSelected {
