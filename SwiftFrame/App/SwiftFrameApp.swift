@@ -8,7 +8,7 @@ struct SwiftFrameApp: App {
         DocumentGroup(newDocument: { StopMotionDocument() }) { file in
             CaptureWindow(document: file.document, fileURL: file.fileURL)
         }
-        .defaultSize(width: 1100, height: 780)
+        .defaultSize(width: 1440, height: 860)
         .commands { FrameCommands() }
     }
 }

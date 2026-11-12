@@ -5,6 +5,7 @@ import SwiftUI
 struct CaptureWindow: View {
     @StateObject private var model: WindowModel
     @Environment(\.undoManager) private var undoManager
+    @SceneStorage("showsInspector") private var showsInspector = true
     let fileURL: URL?
 
     init(document: StopMotionDocument, fileURL: URL?) {
@@ -13,13 +14,28 @@ struct CaptureWindow: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ViewerView(model: model)
-                .frame(minWidth: 480, minHeight: 270)
-            Divider()
-            CaptureBar(model: model)
-            Divider()
-            FilmstripView(model: model)
+        NavigationSplitView {
+            CaptureSidebar(model: model)
+        } detail: {
+            VStack(spacing: 0) {
+                ViewerView(model: model)
+                    .frame(minWidth: 480, minHeight: 270)
+                Divider()
+                CaptureBar(model: model)
+                Divider()
+                FilmstripView(model: model)
+            }
+            .inspector(isPresented: $showsInspector) {
+                FrameInspector(model: model)
+                    .toolbar {
+                        Button {
+                            showsInspector.toggle()
+                        } label: {
+                            Label("Inspector", systemImage: "sidebar.right")
+                        }
+                        .help("Show or hide the inspector")
+                    }
+            }
         }
         .toolbar { WindowToolbar(model: model) }
         .focusedSceneObject(model)
