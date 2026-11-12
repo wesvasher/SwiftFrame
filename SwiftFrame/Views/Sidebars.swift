@@ -55,6 +55,10 @@ struct CaptureSidebar: View {
                 Picker("Frame Rate", selection: Binding(get: { model.project.framesPerSecond },
                                                        set: model.setFrameRate)) {
                     ForEach(Project.frameRates, id: \.self) { Text("\($0) fps").tag($0) }
+                    if !Project.frameRates.contains(model.project.framesPerSecond) {
+                        // A custom rate from the capture bar's switch.
+                        Text("\(model.project.framesPerSecond) fps").tag(model.project.framesPerSecond)
+                    }
                 }
                 Toggle("Loop", isOn: Binding(get: { model.project.loopPlayback }, set: model.setLoop))
             }

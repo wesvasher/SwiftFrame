@@ -91,6 +91,7 @@ private struct CaptureBar: View {
                     ProgressView(value: progress).frame(width: 90)
                     Text("Exporting…").font(.callout).foregroundStyle(.secondary)
                 }
+                FrameRateSwitch(model: model)
                 Picker("Viewer", selection: modeBinding) {
                     Label("Live", systemImage: "camera").tag(WindowModel.Mode.live)
                     Label("Frame", systemImage: "photo").tag(WindowModel.Mode.review)
@@ -258,5 +259,99 @@ private struct CommandTapMonitor: NSViewRepresentable {
             monitor = nil
             super.removeFromSuperview()
         }
+    }
+}
+
+/// A small Liquid Glass switch for the frame rate: 12, 24, or a custom rate
+/// set in a popover.
+private struct FrameRateSwitch: View {
+    @ObservedObject var model: WindowModel
+    @AppStorage("customFrameRate") private var lastCustom = 15
+    @State private var showsCustom = false
+    @Namespace private var selection
+
+    private enum Choice: Hashable { case twelve, twentyFour, custom }
+
+    static let customRange = 1...60
+
+    private var choice: Choice {
+        switch model.project.framesPerSecond {
+        case 12: .twelve
+        case 24: .twentyFour
+        default: .custom
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment(.twelve, "12")
+            segment(.twentyFour, "24")
+            segment(.custom, choice == .custom ? "\(model.project.framesPerSecond)" : "Custom")
+                .popover(isPresented: $showsCustom, arrowEdge: .top) { customEditor }
+        }
+        .padding(2)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: choice)
+        .help("Frames per second")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Frame rate")
+    }
+
+    private func segment(_ value: Choice, _ title: String) -> some View {
+        let isSelected = choice == value
+        return Button {
+            choose(value)
+        } label: {
+            Text(title)
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .padding(.horizontal, 9)
+                .frame(minWidth: 30, minHeight: 20)
+                .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .matchedGeometryEffect(id: "selected", in: selection)
+                    }
+                }
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func choose(_ value: Choice) {
+        switch value {
+        case .twelve: model.setFrameRate(12)
+        case .twentyFour: model.setFrameRate(24)
+        case .custom:
+            if choice != .custom { model.setFrameRate(lastCustom) }
+            showsCustom = true
+        }
+    }
+
+    private var customEditor: some View {
+        let rate = Binding {
+            model.project.framesPerSecond
+        } set: { value in
+            let clamped = value.clamped(to: Self.customRange)
+            model.setFrameRate(clamped)
+            if clamped != 12, clamped != 24 { lastCustom = clamped }
+        }
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Custom Frame Rate").font(.headline)
+            // No text field: Space and Delete are window shortcuts here.
+            HStack {
+                Text("\(model.project.framesPerSecond) fps")
+                    .font(.title3.weight(.semibold).monospacedDigit())
+                    .frame(width: 70, alignment: .leading)
+                Stepper("", value: rate, in: Self.customRange).labelsHidden()
+            }
+            Slider(value: Binding(get: { Double(rate.wrappedValue) }, set: { rate.wrappedValue = Int($0.rounded()) }),
+                   in: Double(Self.customRange.lowerBound)...Double(Self.customRange.upperBound), step: 1)
+                .frame(width: 220)
+            Text("Any rate from 1 to 60 frames per second.").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(14)
     }
 }
