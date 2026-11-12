@@ -1,0 +1,88 @@
+import SwiftUI
+
+@main
+struct SwiftFrameApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
+
+    var body: some Scene {
+        DocumentGroup(newDocument: { StopMotionDocument() }) { file in
+            CaptureWindow(document: file.document, fileURL: file.fileURL)
+        }
+        .defaultSize(width: 1100, height: 780)
+        .commands { FrameCommands() }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Start with a new capture window rather than an Open panel.
+        UserDefaults.standard.register(defaults: ["NSShowAppCentricOpenPanelInsteadOfUntitledFile": false])
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Opening a project from Finder arrives first; otherwise start a new one.
+        DispatchQueue.main.async {
+            if NSDocumentController.shared.documents.isEmpty {
+                NSDocumentController.shared.newDocument(nil)
+            }
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { NSDocumentController.shared.newDocument(nil) }
+        return false
+    }
+}
+
+/// The Frame menu. It acts on the front capture window.
+struct FrameCommands: Commands {
+    @FocusedObject private var model: WindowModel?
+
+    var body: some Commands {
+        CommandMenu("Frame") {
+            Button("Capture Frame") { model?.capture() }
+                .keyboardShortcut(.space, modifiers: [])
+                .disabled(model?.canCapture != true)
+            Button(model?.mode == .playback ? "Stop Playback" : "Play") { model?.togglePlayback() }
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(model?.frames.isEmpty ?? true)
+            Button("Go Live") { model?.goLive() }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(model == nil || model?.mode == .live)
+            Divider()
+            Button("Previous Frame") { model?.step(-1) }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+                .disabled(model?.frames.isEmpty ?? true)
+            Button("Next Frame") { model?.step(1) }
+                .keyboardShortcut(.rightArrow, modifiers: [])
+                .disabled(model?.frames.isEmpty ?? true)
+            Button("Select All Frames") { model?.selectAll() }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .disabled(model?.frames.isEmpty ?? true)
+            Divider()
+            Button("Duplicate") { model?.duplicateSelection() }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(model?.hasSelection != true)
+            Button("Hold Longer") { model?.changeHold(by: 1) }
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled(model?.hasSelection != true)
+            Button("Hold Shorter") { model?.changeHold(by: -1) }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(model?.hasSelection != true)
+            Button("Reverse Order") { model?.reverseSelection() }
+                .disabled((model?.selection.count ?? 0) < 2)
+            Button("Delete") { model?.deleteSelection() }
+                .keyboardShortcut(.delete, modifiers: [])
+                .disabled(model?.hasSelection != true)
+            Divider()
+            Button("Add Pictures…") { model?.importImages() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(model == nil)
+        }
+        CommandGroup(after: .importExport) {
+            Button("Export Movie…") { model?.exportMovie() }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(model?.frames.isEmpty ?? true)
+        }
+    }
+}

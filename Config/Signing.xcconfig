@@ -1,0 +1,24 @@
+// Code signing for all targets and configurations.
+//
+// By default builds are ad-hoc signed, which works anywhere (CI, other
+// contributors) but gives every build a new identity, so macOS asks for
+// camera access again after each build.
+//
+// To sign your local builds with a stable identity (so camera access sticks),
+// create Config/Local.xcconfig. It's gitignored. With an Apple Development
+// certificate:
+//
+//   CODE_SIGN_IDENTITY = Apple Development
+//   DEVELOPMENT_TEAM = ABCDE12345
+//
+// Without an Apple account, scripts/make-signing-cert.sh makes a self-signed
+// certificate and writes Local.xcconfig for it.
+
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+// On for release builds. Local.xcconfig can turn it off for a self-signed
+// certificate, which hardened runtime won't load debug libraries from.
+ENABLE_HARDENED_RUNTIME = YES
+
+#include? "Local.xcconfig"

@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+._*
+
+# Xcode (project is generated from project.yml by XcodeGen)
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+dist/
+*.xcarchive
+*.dmg
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Per-Mac signing settings
+Config/Local.xcconfig
