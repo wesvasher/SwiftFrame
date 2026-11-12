@@ -177,7 +177,7 @@ final class WindowModel: ObservableObject {
                                  maxWidth: Self.thumbnailWidths.last!)
     }
 
-    /// Zooms the timeline out (or in) so every frame and the Live tile fit.
+    /// Zooms the timeline out (or in) so every frame fits beside the Capture tile.
     func zoomTimelineToFit() {
         guard !frames.isEmpty, filmstripVisibleWidth > 0 else { return }
         setThumbnailWidth(fitWidth)

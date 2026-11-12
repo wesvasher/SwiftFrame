@@ -1,9 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Every frame in order, then the live camera. Click to review a frame,
-/// Shift- or Command-click to select more, drag to reorder, drop pictures
-/// from Finder to add them.
+/// Every frame in order, with the Capture tile pinned at the right edge (the
+/// frames scroll underneath it). Click to review a frame, Shift- or
+/// Command-click to select more, drag to reorder, drop pictures from Finder
+/// to add them.
 struct FilmstripView: View {
     @ObservedObject var model: WindowModel
 
@@ -15,7 +16,9 @@ struct FilmstripView: View {
                         FrameCell(model: model, frame: frame, number: index + 1)
                             .id(frame.id)
                     }
-                    LiveCell(model: model).id(Self.liveID)
+                    // Room for the pinned Capture tile, so the last frame can
+                    // scroll out from under it. Dropping here moves to the end.
+                    EndSpace(model: model).id(Self.liveID)
                 }
                 .padding(.horizontal, FilmstripLayout.inset)
                 .padding(.top, FilmstripLayout.scrubHeight)
@@ -29,6 +32,16 @@ struct FilmstripView: View {
                 .coordinateSpace(.named(FilmstripLayout.space))
             }
             .scrollIndicators(.visible)
+            .overlay(alignment: .trailing) {
+                CaptureTile(model: model)
+                    .padding(.top, FilmstripLayout.scrubHeight)
+                    .padding(.bottom, 8)
+                    .padding(.horizontal, FilmstripLayout.inset)
+                    .frame(maxHeight: .infinity)
+                    .background(.bar)
+                    .overlay(alignment: .leading) { Divider() }
+                    .shadow(color: .black.opacity(0.12), radius: 6, x: -3)
+            }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.filmstripVisibleWidth = $0 }
             .onChange(of: model.frames.count) { old, new in
                 if new > old, model.mode == .live { withAnimation { proxy.scrollTo(Self.liveID, anchor: .trailing) } }
@@ -56,17 +69,22 @@ enum FilmstripLayout {
     /// Below this width frames shrink their padding and gaps too, so a fully
     /// zoomed-out timeline can fit many frames.
     static let compactWidth: CGFloat = 24
-    /// The Live tile's width, padding included; it never zooms.
+    /// The Capture tile's width, padding included; it never zooms.
     static let liveCellWidth: CGFloat = 112 + 8   // FrameCell.standardWidth + padding
+
+    /// The gap between cells and each cell's padding around its thumbnail
+    /// (the selection color shows in the padding): 5 points between pictures.
+    static let gap: CGFloat = 1
+    static let padding: CGFloat = 2
 
     /// The gap between cells.
     static func spacing(_ thumbnailWidth: CGFloat) -> CGFloat {
-        thumbnailWidth >= compactWidth ? 4 : thumbnailWidth / 6
+        thumbnailWidth >= compactWidth ? gap : thumbnailWidth / 24
     }
 
     /// The cell's padding on each side of its thumbnail.
     static func cellPadding(_ thumbnailWidth: CGFloat) -> CGFloat {
-        thumbnailWidth >= compactWidth ? 4 : thumbnailWidth / 6
+        thumbnailWidth >= compactWidth ? padding : thumbnailWidth / 12
     }
     /// The strip above the frames that moves the playhead.
     static let scrubHeight: CGFloat = 18
@@ -77,24 +95,25 @@ enum FilmstripLayout {
     }
 
     /// The widest thumbnail (up to `maxWidth`) at which `count` frames and the
-    /// Live tile all fit in `visibleWidth`.
+    /// Capture tile all fit in `visibleWidth`.
     static func fitWidth(count: Int, visibleWidth: CGFloat, maxWidth: CGFloat) -> CGFloat {
         guard count > 0 else { return maxWidth }
         let available = visibleWidth - inset * 2 - liveCellWidth
         let perFrame = available / CGFloat(count)
-        // Full padding and gaps (12 points) above the compact width…
-        if perFrame - 12 >= compactWidth { return min(perFrame - 12, maxWidth) }
-        // …and a sixth of the width each (stride 1.5 × width) below it, down
+        // Full padding and gaps above the compact width…
+        let full = padding * 2 + gap
+        if perFrame - full >= compactWidth { return min(perFrame - full, maxWidth) }
+        // …and shrinking with the width below it (stride 1.25 × width), down
         // to half a point wide.
-        return max(0.5, min(perFrame / 1.5, compactWidth - 0.01))
+        return max(0.5, min(perFrame / 1.25, compactWidth - 0.01))
     }
 
-    /// The left edge of the cell at `index` (`frames.count` is the Live tile).
+    /// The left edge of the cell at `index` (`frames.count` is the space under the Capture tile).
     static func cellX(_ index: Int, thumbnailWidth: CGFloat) -> CGFloat {
         inset + CGFloat(index) * stride(thumbnailWidth)
     }
 
-    /// The cell under `x`; `frames.count` or more is the Live tile.
+    /// The cell under `x`; `frames.count` or more is past the last frame.
     static func index(at x: CGFloat, thumbnailWidth: CGFloat) -> Int {
         max(0, Int(((x - inset + spacing(thumbnailWidth) / 2) / stride(thumbnailWidth)).rounded(.down)))
     }
@@ -174,8 +193,8 @@ private struct Playhead: View {
         if model.mode == .review, let id = model.current, let index = model.frames.firstIndex(of: id) {
             return FilmstripLayout.cellX(index, thumbnailWidth: width) + inside + width / 2
         }
-        // Live: the middle of the Live tile.
-        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width) + FilmstripLayout.liveCellWidth / 2
+        // Live: just after the last frame, where the next capture goes.
+        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width) + 2
     }
 
     private var drag: some Gesture {
@@ -236,14 +255,14 @@ private struct FrameCell: View {
                 .frame(width: model.thumbnailWidth)
         }
         .padding(FilmstripLayout.cellPadding(model.thumbnailWidth))
-        .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 7))
+        .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 5))
         .overlay {
             RoundedRectangle(cornerRadius: 7)
                 .strokeBorder(isPlaying ? Color.accentColor : .clear, lineWidth: 2)
         }
         .overlay(alignment: .leading) {
             // Where dropped frames will go.
-            if isTargeted { Capsule().fill(Color.accentColor).frame(width: 3).offset(x: -3.5) }
+            if isTargeted { Capsule().fill(Color.accentColor).frame(width: 3).offset(x: -2) }
         }
         .contentShape(.rect)
         .onTapGesture { model.click(frame.id, modifiers: NSEvent.modifierFlags) }
@@ -285,30 +304,62 @@ private struct GripHandle: View {
     }
 }
 
-private struct LiveCell: View {
+/// The empty space at the end of the frames, under the pinned Capture tile.
+private struct EndSpace: View {
     @ObservedObject var model: WindowModel
     @State private var isTargeted = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: FilmstripLayout.liveCellWidth, height: FrameCell.height)
+            .overlay(alignment: .leading) {
+                if isTargeted { Capsule().fill(Color.accentColor).frame(width: 3).offset(x: -2) }
+            }
+            .contentShape(.rect)
+            .dropDestination(for: FrameDrop.self) { items, _ in
+                model.handleDrop(items, before: nil)
+            } isTargeted: { isTargeted = $0 }
+    }
+}
+
+/// The tile pinned at the timeline's right edge: goes back to the live
+/// camera, or captures a frame when already there. Dropping frames on it
+/// moves them to the end.
+private struct CaptureTile: View {
+    @ObservedObject var model: WindowModel
+    @State private var isTargeted = false
+
+    private var isLive: Bool { model.mode == .live }
 
     var body: some View {
         VStack(spacing: 3) {
             ZStack {
                 RoundedRectangle(cornerRadius: 4).fill(.quaternary)
-                Image(systemName: "camera.fill").font(.title2).foregroundStyle(.secondary)
+                Image(systemName: "camera.fill").font(.title2)
+                    .foregroundStyle(isLive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             }
             .frame(width: FrameCell.standardWidth, height: FrameCell.thumbnailHeight)
-            Text("Live").font(.caption).foregroundStyle(model.mode == .live ? .white : .secondary)
+            Text("Capture")
+                .font(.caption.weight(isLive ? .semibold : .regular))
+                .foregroundStyle(isLive ? .white : .secondary)
+                .frame(minHeight: 16)
         }
         .padding(4)
-        .background(model.mode == .live ? Color.red.opacity(0.85) : .clear, in: .rect(cornerRadius: 7))
-        .overlay(alignment: .leading) {
-            if isTargeted { Capsule().fill(Color.accentColor).frame(width: 3).offset(x: -3.5) }
+        .background(isLive ? Color.red.opacity(0.85) : .clear, in: .rect(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(isTargeted ? Color.accentColor : .clear, lineWidth: 2)
         }
         .contentShape(.rect)
-        .onTapGesture { model.goLive() }
+        .onTapGesture {
+            if isLive { model.capture() } else { model.goLive() }
+        }
         .dropDestination(for: FrameDrop.self) { items, _ in
             model.handleDrop(items, before: nil)
         } isTargeted: { isTargeted = $0 }
-        .help("Back to the live camera")
+        .help(isLive ? "Capture a frame (tap ⌘)" : "Back to the live camera to capture (⌘L)")
+        .accessibilityLabel("Capture")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

@@ -80,11 +80,11 @@ import Testing
     }
 
     @Test func layoutFindsTheCellUnderAPoint() {
-        let width: CGFloat = 112   // stride 124, first cell at 10
+        let width: CGFloat = 112   // stride 117, first cell at 10
         #expect(FilmstripLayout.index(at: 0, thumbnailWidth: width) == 0)
-        #expect(FilmstripLayout.index(at: 130, thumbnailWidth: width) == 0)
-        #expect(FilmstripLayout.index(at: 140, thumbnailWidth: width) == 1)
-        #expect(FilmstripLayout.cellX(2, thumbnailWidth: width) == 258)
+        #expect(FilmstripLayout.index(at: 120, thumbnailWidth: width) == 0)
+        #expect(FilmstripLayout.index(at: 130, thumbnailWidth: width) == 1)
+        #expect(FilmstripLayout.cellX(2, thumbnailWidth: width) == 244)
     }
 }
 

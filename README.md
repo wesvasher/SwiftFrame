@@ -13,7 +13,7 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 - **Real-time preview**: press Space to play and pause the animation at 12 or 24 fps, or any custom rate from 1 to 60, chosen with the switch on the capture bar, looping or once, with the playing frame shown in the filmstrip.
 - **Frame editing**: click a frame to review it. Shift- or Command-click to select more, drag a frame by its handle to reorder, right-click for more, and duplicate, delete, reverse, or hold frames for longer (×2 for shooting "on twos"). Every edit can be undone.
 - **Playhead**: a line across the filmstrip at the frame showing, gliding along while it plays. Drag it, or click or drag in the strip above the frames, to scrub; past the last frame is the live camera.
-- **Back to capturing**: click Live at the end of the filmstrip, press → past the last frame, or press ⌘L.
+- **Back to capturing**: click the Capture tile at the right of the timeline, press → past the last frame, or press ⌘L.
 - **Import pictures**: drop image files onto the filmstrip, or use Frame → Add Pictures.
 - **Export**: save a QuickTime movie in H.264, HEVC, or ProRes 422.
 - **Settings**: choose Auto, Light or Dark appearance, and whether the viewer flashes when you capture.
