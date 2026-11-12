@@ -173,7 +173,7 @@ private struct FrameCell: View {
     static let thumbnailHeight: CGFloat = 63
     /// The width at which a 16:9 picture fits whole.
     static let standardWidth: CGFloat = 112
-    /// The cell's height: the thumbnail plus its number.
+    /// The cell's height: the thumbnail plus its grab handle.
     static let height: CGFloat = thumbnailHeight + 29
 
     private var isSelected: Bool { model.selection.contains(frame.id) }
@@ -201,12 +201,8 @@ private struct FrameCell: View {
                         .padding(3)
                 }
             }
-            Text("\(number)")
-                .font(.caption.monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            GripHandle(isSelected: isSelected)
                 .frame(width: model.thumbnailWidth)
-                .foregroundStyle(isSelected ? .white : .secondary)
         }
         .padding(4)
         .background(isSelected ? Color.accentColor : .clear, in: .rect(cornerRadius: 7))
@@ -230,11 +226,31 @@ private struct FrameCell: View {
         .contextMenu {
             FrameMenuItems(model: model, clicked: frame.id)
         }
-        .help("Frame \(number)" + (frame.hold > 1 ? ", held for \(frame.hold) frames" : ""))
+        .help("Frame \(number)" + (frame.hold > 1 ? ", held for \(frame.hold) frames" : "")
+              + ". Drag to move it; right-click for more.")
     }
 
     private func handleDrop(_ items: [FrameDrop], before target: UUID?) -> Bool {
         model.handleDrop(items, before: target)
+    }
+}
+
+/// The grip under a thumbnail, showing the frame can be dragged.
+private struct GripHandle: View {
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            ForEach(0..<3, id: \.self) { _ in
+                Capsule().frame(width: 2.5, height: 9)
+            }
+        }
+        .rotationEffect(.degrees(90))
+        .foregroundStyle(isSelected ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.tertiary))
+        .frame(maxWidth: .infinity, minHeight: 16)
+        .contentShape(.rect)
+        .pointerStyle(.grabIdle)
+        .accessibilityLabel("Drag handle")
     }
 }
 
@@ -272,12 +288,19 @@ private struct FrameMenuItems: View {
     let clicked: UUID
 
     var body: some View {
+        Button("Copy Picture", systemImage: "doc.on.doc") { act { model.copyPicture(of: clicked) } }
+        Button("Save Picture As…", systemImage: "square.and.arrow.down") { act { model.savePicture(of: clicked) } }
+        Divider()
         Button("Duplicate", systemImage: "plus.square.on.square") { act { model.duplicateSelection() } }
         Button("Hold Longer", systemImage: "plus") { act { model.changeHold(by: 1) } }
         Button("Hold Shorter", systemImage: "minus") { act { model.changeHold(by: -1) } }
         if model.selection.count > 1, model.selection.contains(clicked) {
             Button("Reverse Order", systemImage: "arrow.left.arrow.right") { model.reverseSelection() }
         }
+        Divider()
+        Button("Move to Start", systemImage: "arrow.left.to.line") { act { model.moveSelection(toStart: true) } }
+        Button("Move to End", systemImage: "arrow.right.to.line") { act { model.moveSelection(toStart: false) } }
+        Button("Insert Pictures Before…", systemImage: "photo.badge.plus") { model.importImages(before: clicked) }
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive) { act { model.deleteSelection() } }
     }

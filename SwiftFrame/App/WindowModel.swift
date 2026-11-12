@@ -268,6 +268,37 @@ final class WindowModel: ObservableObject {
         edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
     }
 
+    /// Moves the selected frames, in order, to the start or the end.
+    func moveSelection(toStart: Bool) {
+        guard hasSelection else { return }
+        let ids = selection
+        let target = toStart ? frames.first(where: { !ids.contains($0.id) })?.id : nil
+        edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
+    }
+
+    /// Puts the frame's picture on the clipboard.
+    func copyPicture(of id: UUID) {
+        guard let frame = frames.first(where: { $0.id == id }), let data = document.images[frame.image],
+              let image = NSImage(data: data)
+        else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+    }
+
+    /// Saves the frame's picture as a JPEG file.
+    func savePicture(of id: UUID) {
+        guard let index = frames.firstIndex(of: id), let data = document.images[frames[index].image] else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.jpeg]
+        panel.nameFieldStringValue = "\(movieName.replacingOccurrences(of: ".mov", with: "")) frame \(index + 1).jpg"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try data.write(to: url)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func setFrameRate(_ fps: Int) { edit("Change Frame Rate") { $0.framesPerSecond = fps } }
     func setOnionSkinFrames(_ n: Int) { edit("Change Onion Skin") { $0.onionSkinFrames = n } }
     func setOnionSkinOpacity(_ o: Double) { edit("Change Onion Skin") { $0.onionSkinOpacity = o } }
@@ -276,14 +307,14 @@ final class WindowModel: ObservableObject {
 
     // MARK: - Import
 
-    func importImages() {
+    func importImages(before target: UUID? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = true
         panel.message = "Choose pictures to add as frames, in file name order."
         panel.prompt = "Add Frames"
         guard panel.runModal() == .OK else { return }
-        addImages(panel.urls, before: nil)
+        addImages(panel.urls, before: target)
     }
 
     /// Adds image files as frames, sorted by name, before `target` or at the end.

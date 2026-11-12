@@ -87,3 +87,17 @@ import Testing
         #expect(FilmstripLayout.cellX(2, thumbnailWidth: width) == 258)
     }
 }
+
+@MainActor @Suite struct FrameMenuTests {
+    @Test func moveSelectionToStartAndEnd() {
+        var project = Project()
+        project.frames = (0..<4).map { _ in Frame(image: UUID()) }
+        let model = WindowModel(document: StopMotionDocument(project: project, images: [:]))
+        let ids = model.frames.map(\.id)
+        model.select(ids[2])
+        model.moveSelection(toStart: true)
+        #expect(model.frames.map(\.id) == [ids[2], ids[0], ids[1], ids[3]])
+        model.moveSelection(toStart: false)
+        #expect(model.frames.map(\.id) == [ids[0], ids[1], ids[3], ids[2]])
+    }
+}
