@@ -10,7 +10,7 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 
 - **Live capture**: pick any connected camera (built-in, USB, or Continuity Camera), mirror it if you like, and tap ⌘ to capture a frame.
 - **Onion skin**: show up to five earlier frames over the live camera, fading with age, at the opacity you choose.
-- **Real-time preview**: press Space to play and pause the animation at 12 or 24 fps, or any custom rate from 1 to 60, chosen with the switch beside Live/Frame/Play, looping or once, with the playing frame shown in the filmstrip.
+- **Real-time preview**: press Space to play and pause the animation at 12 or 24 fps, or any custom rate from 1 to 60, chosen with the switch on the capture bar, looping or once, with the playing frame shown in the filmstrip.
 - **Frame editing**: click a frame to review it. Shift- or Command-click to select more, drag a frame by its handle to reorder, right-click for more, and duplicate, delete, reverse, or hold frames for longer (×2 for shooting "on twos"). Every edit can be undone.
 - **Playhead**: a line across the filmstrip at the frame showing, gliding along while it plays. Drag it, or click or drag in the strip above the frames, to scrub; past the last frame is the live camera.
 - **Back to capturing**: click Live at the end of the filmstrip, press → past the last frame, or press ⌘L.

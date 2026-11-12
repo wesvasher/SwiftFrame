@@ -63,7 +63,7 @@ struct CaptureWindow: View {
 }
 
 /// The capture button, with the project's length on one side and the
-/// viewer modes on the other.
+/// frame rate and timeline zoom on the other.
 private struct CaptureBar: View {
     @ObservedObject var model: WindowModel
 
@@ -92,15 +92,6 @@ private struct CaptureBar: View {
                     Text("Exporting…").font(.callout).foregroundStyle(.secondary)
                 }
                 FrameRateSwitch(model: model)
-                Picker("Viewer", selection: modeBinding) {
-                    Label("Live", systemImage: "camera").tag(WindowModel.Mode.live)
-                    Label("Frame", systemImage: "photo").tag(WindowModel.Mode.review)
-                    Label("Play", systemImage: "play").tag(WindowModel.Mode.playback)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-
                 ControlGroup {
                     Button("Zoom Out", systemImage: "minus.magnifyingglass", action: model.zoomOutTimeline)
                         .disabled(!model.canZoomOutTimeline)
@@ -120,20 +111,6 @@ private struct CaptureBar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-    }
-
-    private var modeBinding: Binding<WindowModel.Mode> {
-        Binding {
-            model.mode
-        } set: { mode in
-            switch mode {
-            case .live: model.goLive()
-            case .playback: if model.mode != .playback { model.togglePlayback() }
-            case .review:
-                model.stopPlayback()
-                if model.mode != .review, let last = model.frames.last { model.select(last.id) }
-            }
-        }
     }
 
     private var summary: String {
