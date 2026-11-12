@@ -84,12 +84,12 @@ private struct CaptureBar: View {
                 .fixedSize()
 
                 ControlGroup {
-                    Button("Zoom Out", systemImage: "minus.magnifyingglass", action: model.zoomOut)
-                        .disabled(!model.canZoomOut)
-                        .help("Zoom out (⌘−)")
-                    Button("Zoom In", systemImage: "plus.magnifyingglass", action: model.zoomIn)
-                        .disabled(!model.canZoomIn)
-                        .help("Zoom in (⌘=)")
+                    Button("Zoom Out", systemImage: "minus.magnifyingglass", action: model.zoomOutTimeline)
+                        .disabled(!model.canZoomOutTimeline)
+                        .help("Smaller frames in the timeline (⌘−)")
+                    Button("Zoom In", systemImage: "plus.magnifyingglass", action: model.zoomInTimeline)
+                        .disabled(!model.canZoomInTimeline)
+                        .help("Bigger frames in the timeline (⌘=)")
                 }
                 .labelStyle(.iconOnly)
                 .fixedSize()

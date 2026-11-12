@@ -62,7 +62,7 @@ final class FrameImages {
 
     func thumbnail(_ id: UUID, data: Data?) -> CGImage? {
         if let cached = thumbnails.object(forKey: id as NSUUID) { return cached }
-        guard let data, let image = ImageCoding.decode(data, maxPixelSize: 240) else { return nil }
+        guard let data, let image = ImageCoding.decode(data, maxPixelSize: 480) else { return nil }
         thumbnails.setObject(image, forKey: id as NSUUID)
         return image
     }

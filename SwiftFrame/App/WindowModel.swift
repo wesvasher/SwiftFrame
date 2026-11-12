@@ -31,12 +31,11 @@ final class WindowModel: ObservableObject {
     @Published var flash = false
     @Published var exportProgress: Double?
     @Published var errorMessage: String?
-    /// How far the viewer is zoomed in, from `zoomLevels`.
-    @Published private(set) var zoom: CGFloat = 1
-    /// How far the zoomed picture is dragged from the center, in points.
-    @Published private(set) var pan: CGSize = .zero
-    /// The viewer's size, which limits how far `pan` can go.
-    var viewerSize: CGSize = .zero { didSet { setPan(pan) } }
+    /// The width of the filmstrip's thumbnails, from `thumbnailWidths`. New
+    /// windows start at the size last chosen.
+    @Published private(set) var thumbnailWidth: CGFloat =
+        WindowModel.thumbnailWidths.contains(CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")))
+        ? CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")) : 112
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -122,34 +121,24 @@ final class WindowModel: ObservableObject {
         playingFrame = nil
     }
 
-    // MARK: - Zoom
+    // MARK: - Filmstrip zoom
 
-    static let zoomLevels: [CGFloat] = [1, 1.5, 2, 3, 4, 6, 8]
+    static let thumbnailWidths: [CGFloat] = [48, 72, 112, 160, 240]
 
-    var canZoomIn: Bool { zoom < Self.zoomLevels.last! }
-    var canZoomOut: Bool { zoom > 1 }
+    var canZoomInTimeline: Bool { thumbnailWidth < Self.thumbnailWidths.last! }
+    var canZoomOutTimeline: Bool { thumbnailWidth > Self.thumbnailWidths.first! }
 
-    func zoomIn() {
-        if let next = Self.zoomLevels.first(where: { $0 > zoom + 0.001 }) { setZoom(next) }
+    func zoomInTimeline() {
+        if let next = Self.thumbnailWidths.first(where: { $0 > thumbnailWidth }) { setThumbnailWidth(next) }
     }
 
-    func zoomOut() {
-        if let next = Self.zoomLevels.last(where: { $0 < zoom - 0.001 }) { setZoom(next) }
+    func zoomOutTimeline() {
+        if let next = Self.thumbnailWidths.last(where: { $0 < thumbnailWidth }) { setThumbnailWidth(next) }
     }
 
-    func actualSize() { setZoom(1) }
-
-    private func setZoom(_ value: CGFloat) {
-        zoom = value
-        setPan(pan)
-    }
-
-    /// Moves the zoomed picture, keeping its edges at or past the viewer's.
-    func setPan(_ value: CGSize) {
-        let maxX = viewerSize.width * (zoom - 1) / 2, maxY = viewerSize.height * (zoom - 1) / 2
-        let clamped = CGSize(width: value.width.clamped(to: -maxX...maxX),
-                             height: value.height.clamped(to: -maxY...maxY))
-        if clamped != pan { pan = clamped }
+    private func setThumbnailWidth(_ width: CGFloat) {
+        thumbnailWidth = width
+        UserDefaults.standard.set(Double(width), forKey: "FilmstripThumbnailWidth")
     }
 
     // MARK: - Selection

@@ -27,8 +27,13 @@ struct FilmstripView: View {
             .onChange(of: model.mode == .playback ? model.playingFrame : model.current) { _, id in
                 if let id { proxy.scrollTo(id) }
             }
+            .onChange(of: model.thumbnailWidth) {
+                // Keep the frame being looked at in view after zooming.
+                if let id = model.current { proxy.scrollTo(id, anchor: .center) }
+                else { proxy.scrollTo(Self.liveID, anchor: .trailing) }
+            }
         }
-        .frame(height: FrameCell.height + 16)
+        .frame(height: FrameCell.height(thumbnailWidth: model.thumbnailWidth) + 16)
         .background(.bar)
     }
 
@@ -41,7 +46,12 @@ private struct FrameCell: View {
     let number: Int
     @State private var isTargeted = false
 
-    static let height: CGFloat = 92
+    /// The cell's height: a 16:9 thumbnail plus its number.
+    static func height(thumbnailWidth: CGFloat) -> CGFloat {
+        thumbnailHeight(thumbnailWidth) + 29
+    }
+
+    static func thumbnailHeight(_ width: CGFloat) -> CGFloat { (width * 9 / 16).rounded() }
 
     private var isSelected: Bool { model.selection.contains(frame.id) }
     private var isPlaying: Bool { model.mode == .playback && model.playingFrame == frame.id }
@@ -52,7 +62,7 @@ private struct FrameCell: View {
                 Color.black
                 FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
             }
-            .frame(width: 112, height: 63)
+            .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight(model.thumbnailWidth))
             .clipShape(.rect(cornerRadius: 4))
             .overlay(alignment: .bottomTrailing) {
                 if frame.hold > 1 {
@@ -82,7 +92,7 @@ private struct FrameCell: View {
         .onTapGesture { model.click(frame.id, modifiers: NSEvent.modifierFlags) }
         .draggable(FrameDrag(id: frame.id)) {
             FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
-                .frame(width: 112, height: 63)
+                .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight(model.thumbnailWidth))
         }
         .dropDestination(for: FrameDrop.self) { items, _ in
             handleDrop(items, before: frame.id)
@@ -108,7 +118,7 @@ private struct LiveCell: View {
                 RoundedRectangle(cornerRadius: 4).fill(.quaternary)
                 Image(systemName: "camera.fill").font(.title2).foregroundStyle(.secondary)
             }
-            .frame(width: 112, height: 63)
+            .frame(width: model.thumbnailWidth, height: FrameCell.thumbnailHeight(model.thumbnailWidth))
             Text("Live").font(.caption).foregroundStyle(model.mode == .live ? .white : .secondary)
         }
         .padding(4)

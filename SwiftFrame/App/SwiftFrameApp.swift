@@ -80,15 +80,12 @@ struct FrameCommands: Commands {
                 .disabled(model == nil)
         }
         CommandGroup(before: .toolbar) {
-            Button("Zoom In") { model?.zoomIn() }
+            Button("Zoom In Timeline") { model?.zoomInTimeline() }
                 .keyboardShortcut("=", modifiers: .command)
-                .disabled(model?.canZoomIn != true)
-            Button("Zoom Out") { model?.zoomOut() }
+                .disabled(model?.canZoomInTimeline != true)
+            Button("Zoom Out Timeline") { model?.zoomOutTimeline() }
                 .keyboardShortcut("-", modifiers: .command)
-                .disabled(model?.canZoomOut != true)
-            Button("Actual Size") { model?.actualSize() }
-                .keyboardShortcut("0", modifiers: .command)
-                .disabled(model?.canZoomOut != true)
+                .disabled(model?.canZoomOutTimeline != true)
             Divider()
         }
         CommandGroup(after: .importExport) {
