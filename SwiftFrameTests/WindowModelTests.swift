@@ -163,7 +163,7 @@ import Testing
         let pixels = try #require(buffer)
         context.render(picture, to: pixels)
 
-        let peaking = FocusPeaking(isOn: true, tint: .red, sensitivity: .medium)
+        let peaking = FocusPeaking(isOn: true, tint: .red, sensitivity: FocusPeaking.Preset.medium.rawValue)
         let overlay = try #require(peaking.overlay(for: pixels, context: context))
         let data = try #require(overlay.dataProvider?.data)
         let bytes = try #require(CFDataGetBytePtr(data))
@@ -175,5 +175,19 @@ import Testing
         }
         #expect(left > 200)
         #expect(right < left / 10)
+    }
+}
+
+@Suite struct PeakingSensitivityTests {
+    @Test func staysInRangeAndMatchesPresets() {
+        var peaking = FocusPeaking()
+        #expect(peaking.preset == .medium)
+        peaking.sensitivity += 1
+        #expect(peaking.sensitivity == 6 && peaking.preset == nil)
+        #expect(peaking.threshold < FocusPeaking(sensitivity: 5).threshold)
+        peaking.sensitivity = 40
+        #expect(peaking.sensitivity == 10)
+        peaking.sensitivity = -3
+        #expect(peaking.sensitivity == 1)
     }
 }

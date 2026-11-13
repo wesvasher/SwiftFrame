@@ -23,42 +23,57 @@ struct FocusPeaking: Equatable, Sendable {
         var color: Color { Color(red: rgb.red, green: rgb.green, blue: rgb.blue) }
     }
 
-    enum Sensitivity: String, CaseIterable, Identifiable, Sendable {
-        case low, medium, high
-        var id: Self { self }
-        var name: String { rawValue.capitalized }
+    /// How much counts as in focus, from 1 (only the sharpest edges) to 10
+    /// (softer ones too).
+    static let sensitivityRange = 1...10
 
-        /// How strong an edge has to be to show: lower shows more.
-        var threshold: Double {
+    /// Named sensitivities for the presets menu.
+    enum Preset: Int, CaseIterable, Identifiable, Sendable {
+        case veryLow = 1, low = 3, medium = 5, high = 7, veryHigh = 9
+        var id: Self { self }
+
+        var name: String {
             switch self {
-            case .low: 0.3
-            case .medium: 0.2
-            case .high: 0.13
+            case .veryLow: "Very Low"
+            case .low: "Low"
+            case .medium: "Medium"
+            case .high: "High"
+            case .veryHigh: "Very High"
             }
         }
     }
 
     var isOn = false
     var tint: Tint = .red
-    var sensitivity: Sensitivity = .medium
+    var sensitivity = Preset.medium.rawValue {
+        didSet { sensitivity = min(max(sensitivity, Self.sensitivityRange.lowerBound), Self.sensitivityRange.upperBound) }
+    }
+
+    /// The preset this sensitivity matches, if any.
+    var preset: Preset? { Preset(rawValue: sensitivity) }
+
+    /// How strong an edge has to be to show: each step up shows a fifth more.
+    var threshold: Double { 0.45 * pow(0.8, Double(sensitivity - 1)) }
 
     private static let onKey = "focusPeaking"
     private static let tintKey = "focusPeakingColor"
-    private static let sensitivityKey = "focusPeakingSensitivity"
+    private static let sensitivityKey = "focusPeakingLevel"
 
     static var saved: FocusPeaking {
         let defaults = UserDefaults.standard
         return FocusPeaking(
             isOn: defaults.bool(forKey: onKey),
             tint: defaults.string(forKey: tintKey).flatMap(Tint.init) ?? .red,
-            sensitivity: defaults.string(forKey: sensitivityKey).flatMap(Sensitivity.init) ?? .medium)
+            sensitivity: (defaults.object(forKey: sensitivityKey) as? Int).map {
+                min(max($0, sensitivityRange.lowerBound), sensitivityRange.upperBound)
+            } ?? Preset.medium.rawValue)
     }
 
     func save() {
         let defaults = UserDefaults.standard
         defaults.set(isOn, forKey: Self.onKey)
         defaults.set(tint.rawValue, forKey: Self.tintKey)
-        defaults.set(sensitivity.rawValue, forKey: Self.sensitivityKey)
+        defaults.set(sensitivity, forKey: Self.sensitivityKey)
     }
 
     /// The edges of a camera picture as a transparent image the same shape,
@@ -74,7 +89,7 @@ struct FocusPeaking: Equatable, Sendable {
             // Takes out camera noise, which would otherwise light up flat areas.
             .applyingFilter("CIMedianFilter")
             .applyingFilter("CIEdges", parameters: [kCIInputIntensityKey: 3])
-            .applyingFilter("CIColorThreshold", parameters: ["inputThreshold": sensitivity.threshold])
+            .applyingFilter("CIColorThreshold", parameters: ["inputThreshold": threshold])
             .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: 1])
             .cropped(to: extent)
         let mask = edges.applyingFilter("CIMaskToAlpha")

@@ -47,10 +47,8 @@ struct CaptureSidebar: View {
                         .tag(tint)
                     }
                 }
-                Picker("Sensitivity", selection: $model.focusPeaking.sensitivity) {
-                    ForEach(FocusPeaking.Sensitivity.allCases) { Text($0.name).tag($0) }
-                }
-                .disabled(!model.focusPeaking.isOn)
+                PeakingSensitivity(peaking: $model.focusPeaking)
+                    .disabled(!model.focusPeaking.isOn)
             }
 
             Section("Onion Skin") {
@@ -174,5 +172,60 @@ struct FrameInspector: View {
     private func time(_ playbackFrames: Int) -> String {
         let seconds = Double(playbackFrames) / Double(max(model.project.framesPerSecond, 1))
         return seconds.formatted(.number.precision(.fractionLength(2))) + " s"
+    }
+}
+
+/// Focus peaking's sensitivity: − and + step the number, and the menu jumps
+/// to a named preset (it says Custom between them).
+private struct PeakingSensitivity: View {
+    @Binding var peaking: FocusPeaking
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Sensitivity")
+                .foregroundStyle(isEnabled ? .secondary : .tertiary)
+            HStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Button {
+                        peaking.sensitivity -= 1
+                    } label: {
+                        Label("Less Sensitive", systemImage: "minus")
+                    }
+                    .disabled(peaking.sensitivity <= FocusPeaking.sensitivityRange.lowerBound)
+                    .help("Show only the sharpest edges")
+
+                    Text("\(peaking.sensitivity)")
+                        .font(.body.monospacedDigit().weight(.semibold))
+                        .frame(minWidth: 22)
+                        .accessibilityLabel("Sensitivity \(peaking.sensitivity)")
+
+                    Button {
+                        peaking.sensitivity += 1
+                    } label: {
+                        Label("More Sensitive", systemImage: "plus")
+                    }
+                    .disabled(peaking.sensitivity >= FocusPeaking.sensitivityRange.upperBound)
+                    .help("Show softer edges too")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.bordered)
+                .fixedSize()
+
+                Spacer(minLength: 0)
+
+                Menu(peaking.preset?.name ?? "Custom") {
+                    ForEach(FocusPeaking.Preset.allCases) { preset in
+                        Toggle(isOn: Binding(get: { peaking.preset == preset },
+                                             set: { _ in peaking.sensitivity = preset.rawValue })) {
+                            Text("\(preset.name) (\(preset.rawValue))")
+                        }
+                    }
+                }
+                .menuStyle(.button)
+                .fixedSize()
+                .help("Sensitivity presets")
+            }
+        }
     }
 }
