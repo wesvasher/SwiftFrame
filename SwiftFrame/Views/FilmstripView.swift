@@ -271,7 +271,7 @@ private struct Playhead: View {
     @State private var dragStart: CGFloat?
     @State private var isHovered = false
     @State private var sparks = FireTrail.Sparks()
-    @AppStorage(GeneralSettings.playheadFireKey) private var showsFire = true
+    @AppStorage(GeneralSettings.habaneroModeKey) private var showsFire = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let grabWidth: CGFloat = 12

@@ -111,7 +111,7 @@ struct AppearanceSettingsView: View {
 /// Settings › General.
 struct GeneralSettingsView: View {
     @AppStorage(GeneralSettings.flashOnCaptureKey) private var flashOnCapture = true
-    @AppStorage(GeneralSettings.playheadFireKey) private var playheadFire = true
+    @AppStorage(GeneralSettings.habaneroModeKey) private var habaneroMode = false
 
     var body: some View {
         Form {
@@ -119,8 +119,10 @@ struct GeneralSettingsView: View {
                 Toggle("Flash the viewer when a frame is captured", isOn: $flashOnCapture)
             }
             Section("Playback") {
-                Toggle("Fire trail behind the playhead", isOn: $playheadFire)
-                Text("Sparks stream off the playhead while the animation plays. Off when Reduce Motion is on.")
+                Toggle(isOn: $habaneroMode) {
+                    Label("Habanero Mode", systemImage: "flame.fill")
+                }
+                Text("Streaks of fire stream off the playhead while the animation plays. Skipped when Reduce Motion is on.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -131,7 +133,8 @@ struct GeneralSettingsView: View {
 
 enum GeneralSettings {
     static let flashOnCaptureKey = "flashOnCapture"
-    static let playheadFireKey = "playheadFire"
+    /// Off unless turned on: the playhead's fire trail.
+    static let habaneroModeKey = "habaneroMode"
 
     static var flashOnCapture: Bool {
         UserDefaults.standard.object(forKey: flashOnCaptureKey) as? Bool ?? true
