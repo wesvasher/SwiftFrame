@@ -35,6 +35,24 @@ struct CaptureSidebar: View {
                 Toggle("Mirror", isOn: Binding(get: { model.project.mirrorCamera }, set: model.setMirror))
             }
 
+            Section("Focus Peaking") {
+                Toggle("Focus Peaking", isOn: $model.focusPeaking.isOn)
+                Picker("Color", selection: $model.focusPeaking.tint) {
+                    ForEach(FocusPeaking.Tint.allCases) { tint in
+                        Label {
+                            Text(tint.name)
+                        } icon: {
+                            Image(systemName: "circle.fill").foregroundStyle(tint.color)
+                        }
+                        .tag(tint)
+                    }
+                }
+                Picker("Sensitivity", selection: $model.focusPeaking.sensitivity) {
+                    ForEach(FocusPeaking.Sensitivity.allCases) { Text($0.name).tag($0) }
+                }
+                .disabled(!model.focusPeaking.isOn)
+            }
+
             Section("Onion Skin") {
                 Stepper(value: Binding(get: { model.project.onionSkinFrames }, set: model.setOnionSkinFrames),
                         in: 0...5) {

@@ -4,20 +4,112 @@ import SwiftUI
 /// playback.
 struct ViewerView: View {
     @ObservedObject var model: WindowModel
+    @State private var pinchStart: CGFloat?
+    @State private var dragStart: CGSize?
 
     var body: some View {
         ZStack {
             Color.black
             switch model.mode {
+            // The camera preview zooms itself; its overlays use `zoomed`.
             case .live: LiveView(model: model)
-            case .review: ReviewView(model: model)
-            case .playback: PlaybackView(model: model)
+            case .review: ReviewView(model: model).zoomed(model)
+            case .playback: PlaybackView(model: model).zoomed(model)
             }
         }
+        .contentShape(Rectangle())
+        .gesture(pinch)
+        .simultaneousGesture(pan)
+        .onTapGesture(count: 2) {
+            withAnimation(.snappy(duration: 0.2)) {
+                if model.viewerZoom > 1 { model.zoomViewerToFit() } else { model.setViewerZoom(2) }
+            }
+        }
+        .onGeometryChange(for: CGSize.self, of: \.size) { size in
+            model.viewerSize = size
+            model.panViewer(to: model.viewerPan)
+        }
         .overlay(alignment: .topLeading) { ModeBadge(model: model).padding(12) }
+        .overlay(alignment: .bottomTrailing) { ViewerZoomControls(model: model).padding(12) }
         .overlay { if model.flash { Color.white.opacity(0.35).allowsHitTesting(false) } }
         .animation(.easeOut(duration: 0.12), value: model.flash)
         .clipped()
+    }
+
+    /// Pinching zooms the picture.
+    private var pinch: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let start = pinchStart ?? model.viewerZoom
+                pinchStart = start
+                model.setViewerZoom(start * value.magnification)
+            }
+            .onEnded { _ in pinchStart = nil }
+    }
+
+    /// Dragging moves a zoomed-in picture around.
+    private var pan: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard model.viewerZoom > 1 else { return }
+                let start = dragStart ?? model.viewerPan
+                dragStart = start
+                model.panViewer(to: CGSize(width: start.width + value.translation.width,
+                                           height: start.height + value.translation.height))
+            }
+            .onEnded { _ in dragStart = nil }
+    }
+}
+
+extension View {
+    /// Scales and moves a picture with the viewer's zoom, the same way the
+    /// camera preview does, so they line up.
+    func zoomed(_ model: WindowModel) -> some View {
+        scaleEffect(model.viewerZoom).offset(model.viewerPan)
+    }
+}
+
+/// Zoom out, the zoom (click to fit) and zoom in, over the viewer's corner.
+private struct ViewerZoomControls: View {
+    @ObservedObject var model: WindowModel
+
+    var body: some View {
+        HStack(spacing: 2) {
+            button("minus.magnifyingglass", help: "Zoom out (⌥⌘−)", enabled: model.canZoomOutViewer) {
+                model.zoomOutViewer()
+            }
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { model.zoomViewerToFit() }
+            } label: {
+                Text(model.viewerZoom <= 1.001 ? "Fit" : "\(Int((model.viewerZoom * 100).rounded()))%")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .frame(minWidth: 40, minHeight: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Fit the whole picture (⌥⌘0)")
+            button("plus.magnifyingglass", help: "Zoom in (⌥⌘=)", enabled: model.canZoomInViewer) {
+                model.zoomInViewer()
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 4)
+        .background(.black.opacity(0.55), in: Capsule())
+    }
+
+    private func button(_ symbol: String, help: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.2), action)
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 26, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+        .help(help)
     }
 }
 
@@ -48,8 +140,15 @@ private struct LiveView: View {
         ZStack {
             switch camera.status {
             case .running, .starting:
-                CameraPreview(session: camera.session, mirrored: model.project.mirrorCamera)
-                OnionSkin(model: model)
+                CameraPreview(session: camera.session, mirrored: model.project.mirrorCamera,
+                              zoom: model.viewerZoom, pan: model.viewerPan)
+                Group {
+                    OnionSkin(model: model)
+                    if model.focusPeaking.isOn {
+                        PeakingOverlay(feed: camera.peakingFeed, mirrored: model.project.mirrorCamera)
+                    }
+                }
+                .zoomed(model)
                 if camera.status == .starting { ProgressView().controlSize(.large) }
             case .denied:
                 CameraMessage(
@@ -72,6 +171,21 @@ private struct LiveView: View {
                               }))
             }
         }
+        // Only work out focus peaking while it's showing.
+        .onChange(of: model.focusPeaking, initial: true) { camera.setFocusPeaking(model.focusPeaking) }
+        .onDisappear { camera.setFocusPeaking(nil) }
+    }
+}
+
+/// Focus peaking's sharp edges over the live camera.
+private struct PeakingOverlay: View {
+    @ObservedObject var feed: PeakingFeed
+    let mirrored: Bool
+
+    var body: some View {
+        FramePicture(image: feed.image)
+            .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+            .allowsHitTesting(false)
     }
 }
 

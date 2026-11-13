@@ -148,6 +148,11 @@ private struct WindowToolbar: ToolbarContent {
                 Label(cameraName, systemImage: "web.camera")
             }
             .help("Choose a camera")
+
+            Toggle(isOn: $model.focusPeaking.isOn) {
+                Label("Focus Peaking", systemImage: "viewfinder")
+            }
+            .help("Show what's in focus on the live camera (⇧⌘P)")
         }
 
         ToolbarItemGroup {

@@ -36,6 +36,14 @@ final class WindowModel: ObservableObject {
     @Published private(set) var thumbnailWidth: CGFloat =
         WindowModel.thumbnailWidths.contains(CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")))
         ? CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")) : 112
+    /// How far the viewer is zoomed in on the picture: 1 fits the whole picture.
+    @Published private(set) var viewerZoom: CGFloat = 1
+    /// How far the zoomed picture is moved from the middle, in points.
+    @Published private(set) var viewerPan: CGSize = .zero
+    /// Focus peaking over the live camera; new windows start as the last one was set.
+    @Published var focusPeaking = FocusPeaking.saved {
+        didSet { focusPeaking.save() }
+    }
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -197,6 +205,42 @@ final class WindowModel: ObservableObject {
         if Self.thumbnailWidths.contains(width) {
             UserDefaults.standard.set(Double(width), forKey: "FilmstripThumbnailWidth")
         }
+    }
+
+    // MARK: - Viewer zoom
+
+    static let viewerZooms: [CGFloat] = [1, 1.5, 2, 3, 4, 6, 8]
+    static let viewerZoomRange: ClosedRange<CGFloat> = 1...8
+    /// The viewer's size, for keeping a zoomed picture inside it.
+    var viewerSize: CGSize = .zero
+
+    var canZoomInViewer: Bool { viewerZoom < Self.viewerZoomRange.upperBound - 0.001 }
+    var canZoomOutViewer: Bool { viewerZoom > 1.001 }
+
+    func zoomInViewer() {
+        setViewerZoom(Self.viewerZooms.first { $0 > viewerZoom + 0.001 } ?? Self.viewerZoomRange.upperBound)
+    }
+
+    func zoomOutViewer() {
+        setViewerZoom(Self.viewerZooms.last { $0 < viewerZoom - 0.001 } ?? 1)
+    }
+
+    func zoomViewerToFit() { setViewerZoom(1) }
+
+    /// Zooms about the middle of the view, keeping what's there in the middle.
+    func setViewerZoom(_ zoom: CGFloat) {
+        let zoom = min(max(zoom, Self.viewerZoomRange.lowerBound), Self.viewerZoomRange.upperBound)
+        let ratio = zoom / viewerZoom
+        viewerZoom = zoom
+        panViewer(to: CGSize(width: viewerPan.width * ratio, height: viewerPan.height * ratio))
+    }
+
+    /// Moves the zoomed picture, as far as its edges reach the view's.
+    func panViewer(to pan: CGSize) {
+        let maxX = viewerSize.width * (viewerZoom - 1) / 2
+        let maxY = viewerSize.height * (viewerZoom - 1) / 2
+        viewerPan = CGSize(width: min(max(pan.width, -maxX), maxX),
+                           height: min(max(pan.height, -maxY), maxY))
     }
 
     // MARK: - Selection

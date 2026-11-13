@@ -25,6 +25,9 @@ final class CameraController: NSObject, ObservableObject {
     private nonisolated let queue = DispatchQueue(label: "com.wesvasher.swiftframe.camera")
     private nonisolated let latest = LatestFrame()
     private nonisolated let ciContext = CIContext()
+    private nonisolated let peakingRequest = PeakingRequest()
+    /// Focus peaking pictures for the live view, while it's asked for.
+    let peakingFeed = PeakingFeed()
     private var watchers: [Task<Void, Never>] = []
 
     override init() {
@@ -120,6 +123,18 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    /// Starts or stops working out focus peaking pictures (nil stops it).
+    func setFocusPeaking(_ peaking: FocusPeaking?) {
+        let on = peaking?.isOn == true
+        peakingRequest.set(on ? peaking : nil)
+        if !on { peakingFeed.image = nil }
+    }
+
+    fileprivate func receivePeaking(_ image: CGImage?, generation: Int) {
+        guard peakingRequest.isCurrent(generation) else { return }
+        peakingFeed.image = image
+    }
+
     /// The newest camera picture, mirrored if asked.
     func captureStill(mirrored: Bool) -> CGImage? {
         guard let buffer = latest.buffer else { return nil }
@@ -132,7 +147,13 @@ final class CameraController: NSObject, ObservableObject {
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                                    from connection: AVCaptureConnection) {
-        latest.buffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+        guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        latest.buffer = buffer
+        guard let (peaking, generation) = peakingRequest.due(at: CACurrentMediaTime()) else { return }
+        let image = UncheckedImage(peaking.overlay(for: buffer, context: ciContext))
+        Task { @MainActor [weak self] in
+            self?.receivePeaking(image.image, generation: generation)
+        }
     }
 }
 
@@ -144,4 +165,42 @@ private final class LatestFrame: @unchecked Sendable {
         get { lock.withLock { _buffer } }
         set { lock.withLock { _buffer = newValue } }
     }
+}
+
+/// What focus peaking the camera queue should work out, and when it last did,
+/// so it runs about 15 times a second rather than for every camera frame.
+private final class PeakingRequest: @unchecked Sendable {
+    private let lock = NSLock()
+    private var peaking: FocusPeaking?
+    private var generation = 0
+    private var last: CFTimeInterval = 0
+    private let interval: CFTimeInterval = 1.0 / 15
+
+    @discardableResult
+    func set(_ peaking: FocusPeaking?) -> Int {
+        lock.withLock {
+            self.peaking = peaking
+            generation += 1
+            last = 0
+            return generation
+        }
+    }
+
+    func isCurrent(_ generation: Int) -> Bool {
+        lock.withLock { peaking != nil && generation == self.generation }
+    }
+
+    func due(at time: CFTimeInterval) -> (FocusPeaking, Int)? {
+        lock.withLock {
+            guard let peaking, time - last >= interval else { return nil }
+            last = time
+            return (peaking, generation)
+        }
+    }
+}
+
+/// A finished picture handed from the camera queue to the main actor.
+private struct UncheckedImage: @unchecked Sendable {
+    let image: CGImage?
+    init(_ image: CGImage?) { self.image = image }
 }

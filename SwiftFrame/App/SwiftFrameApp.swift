@@ -86,6 +86,21 @@ struct FrameCommands: Commands {
                 .disabled(model == nil)
         }
         CommandGroup(before: .toolbar) {
+            Button("Zoom In Picture") { model?.zoomInViewer() }
+                .keyboardShortcut("=", modifiers: [.command, .option])
+                .disabled(model?.canZoomInViewer != true)
+            Button("Zoom Out Picture") { model?.zoomOutViewer() }
+                .keyboardShortcut("-", modifiers: [.command, .option])
+                .disabled(model?.canZoomOutViewer != true)
+            Button("Fit Picture") { model?.zoomViewerToFit() }
+                .keyboardShortcut("0", modifiers: [.command, .option])
+                .disabled(model?.canZoomOutViewer != true)
+            Toggle("Focus Peaking", isOn: Binding(
+                get: { model?.focusPeaking.isOn ?? false },
+                set: { model?.focusPeaking.isOn = $0 }))
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(model == nil)
+            Divider()
             Button("Zoom In Timeline") { model?.zoomInTimeline() }
                 .keyboardShortcut("=", modifiers: .command)
                 .disabled(model?.canZoomInTimeline != true)

@@ -1,4 +1,6 @@
 import CoreGraphics
+import CoreImage
+import CoreVideo
 import Foundation
 import Testing
 @testable import SwiftFrame
@@ -117,5 +119,61 @@ import Testing
 
     @Test func fewFramesStopAtTheWidestStep() {
         #expect(FilmstripLayout.fitWidth(count: 1, visibleWidth: 900, maxWidth: 240) == 240)
+    }
+}
+
+@MainActor @Suite struct ViewerZoomTests {
+    @Test func stepsAndKeepsThePictureInView() {
+        let model = WindowModel(document: StopMotionDocument())
+        model.viewerSize = CGSize(width: 800, height: 600)
+        #expect(model.viewerZoom == 1 && !model.canZoomOutViewer)
+        model.zoomInViewer()
+        #expect(model.viewerZoom == 1.5)
+        model.zoomInViewer()
+        #expect(model.viewerZoom == 2)
+
+        // At 2×, the picture can move half the view each way, no further.
+        model.panViewer(to: CGSize(width: 1000, height: -1000))
+        #expect(model.viewerPan == CGSize(width: 400, height: -300))
+        // Zooming out pulls it back in; fitting centers it.
+        model.zoomOutViewer()
+        #expect(model.viewerZoom == 1.5 && model.viewerPan == CGSize(width: 200, height: -150))
+        model.zoomViewerToFit()
+        #expect(model.viewerZoom == 1 && model.viewerPan == .zero)
+
+        model.setViewerZoom(20)
+        #expect(model.viewerZoom == 8 && !model.canZoomInViewer)
+    }
+}
+
+@Suite struct FocusPeakingTests {
+    @Test func outlinesSharpEdgesOnly() throws {
+        // A sharp-edged square on the left, a blurred one on the right.
+        let size = CGSize(width: 400, height: 200)
+        let square = CIImage(color: .white).cropped(to: CGRect(x: 40, y: 50, width: 100, height: 100))
+        let soft = CIImage(color: .white).cropped(to: CGRect(x: 260, y: 50, width: 100, height: 100))
+            .applyingFilter("CIGaussianBlur", parameters: ["inputRadius": 8])
+        let picture = square.composited(over: soft)
+            .composited(over: CIImage(color: CIColor(red: 0.1, green: 0.1, blue: 0.1)))
+            .cropped(to: CGRect(origin: .zero, size: size))
+        var buffer: CVPixelBuffer?
+        CVPixelBufferCreate(nil, Int(size.width), Int(size.height), kCVPixelFormatType_32BGRA,
+                            [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &buffer)
+        let context = CIContext()
+        let pixels = try #require(buffer)
+        context.render(picture, to: pixels)
+
+        let peaking = FocusPeaking(isOn: true, tint: .red, sensitivity: .medium)
+        let overlay = try #require(peaking.overlay(for: pixels, context: context))
+        let data = try #require(overlay.dataProvider?.data)
+        let bytes = try #require(CFDataGetBytePtr(data))
+        var left = 0, right = 0
+        for y in 0..<overlay.height {
+            for x in 0..<overlay.width where bytes[y * overlay.bytesPerRow + x * 4 + 3] > 128 {
+                if x < overlay.width / 2 { left += 1 } else { right += 1 }
+            }
+        }
+        #expect(left > 200)
+        #expect(right < left / 10)
     }
 }

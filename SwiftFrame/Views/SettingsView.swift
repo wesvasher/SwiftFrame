@@ -73,7 +73,7 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     static let storageKey = "appAppearance"
 
     /// Applies the setting to every window in the app.
-    func apply() {
+    @MainActor func apply() {
         switch self {
         case .auto: NSApp.appearance = nil
         case .light: NSApp.appearance = NSAppearance(named: .aqua)
