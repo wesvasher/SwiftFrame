@@ -64,15 +64,49 @@ struct CaptureWindow: View {
 
 /// The capture button, with the project's length on one side and the
 /// frame rate and timeline zoom on the other.
+/// Picks the camera, beside the capture button.
+private struct CameraSelector: View {
+    @ObservedObject var model: WindowModel
+    @ObservedObject var camera: CameraController
+
+    var body: some View {
+        Menu {
+            if camera.devices.isEmpty {
+                Text("No cameras found")
+            }
+            Picker("Camera", selection: Binding(get: { camera.deviceID ?? "" }, set: { model.selectCamera($0) })) {
+                ForEach(camera.devices) { Text($0.name).tag($0.id) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Label(name, systemImage: camera.devices.isEmpty ? "video.slash" : "web.camera")
+                .lineLimit(1)
+        }
+        .menuStyle(.button)
+        .frame(maxWidth: 220, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .help("Choose a camera")
+    }
+
+    private var name: String {
+        camera.devices.first { $0.id == camera.deviceID }?.name ?? "No Camera"
+    }
+}
+
 private struct CaptureBar: View {
     @ObservedObject var model: WindowModel
 
     var body: some View {
         HStack {
-            Text(summary)
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 10) {
+                CameraSelector(model: model, camera: model.camera)
+                Text(summary)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: model.capture) {
                 ZStack {
