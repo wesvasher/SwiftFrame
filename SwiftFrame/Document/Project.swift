@@ -111,6 +111,22 @@ extension Array where Element == Frame {
         return copies.map(\.id)
     }
 
+    /// Moves each of the frames `delta` places along (left when negative),
+    /// keeping the gaps between them, as far as the ends allow. Returns how
+    /// far they moved.
+    @discardableResult
+    mutating func shift(ids: Set<UUID>, by delta: Int) -> Int {
+        let picked = indices.filter { ids.contains(self[$0].id) }
+        guard let first = picked.first, let last = picked.last else { return 0 }
+        let delta = Swift.min(Swift.max(delta, -first), count - 1 - last)
+        guard delta != 0 else { return 0 }
+        var result = [Frame?](repeating: nil, count: count)
+        for i in picked { result[i + delta] = self[i] }
+        var rest = filter { !ids.contains($0.id) }.makeIterator()
+        self = result.map { $0 ?? rest.next()! }
+        return delta
+    }
+
     /// Moves the frames, keeping their order, to just before `target` (or to
     /// the end when `target` is nil). Dropping on a moved frame puts them
     /// before the next frame that isn't moving.

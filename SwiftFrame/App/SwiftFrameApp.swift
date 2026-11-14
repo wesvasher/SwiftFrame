@@ -86,6 +86,18 @@ struct FrameCommands: Commands {
             Button("Duplicate") { model?.duplicateSelection() }
                 .keyboardShortcut("d", modifiers: .command)
                 .disabled(model?.hasSelection != true)
+            Button("Move Left") { model?.shiftSelection(by: -1) }
+                .keyboardShortcut(.leftArrow, modifiers: .option)
+                .disabled(model?.canShiftSelection(by: -1) != true)
+            Button("Move Right") { model?.shiftSelection(by: 1) }
+                .keyboardShortcut(.rightArrow, modifiers: .option)
+                .disabled(model?.canShiftSelection(by: 1) != true)
+            Button("Move Left 10") { model?.shiftSelection(by: -10) }
+                .keyboardShortcut(.leftArrow, modifiers: [.option, .shift])
+                .disabled(model?.canShiftSelection(by: -1) != true)
+            Button("Move Right 10") { model?.shiftSelection(by: 10) }
+                .keyboardShortcut(.rightArrow, modifiers: [.option, .shift])
+                .disabled(model?.canShiftSelection(by: 1) != true)
             Button("Hold Longer") { model?.changeHold(by: 1) }
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(model?.hasSelection != true)

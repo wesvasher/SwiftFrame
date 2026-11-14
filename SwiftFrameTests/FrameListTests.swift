@@ -121,3 +121,21 @@ import Testing
         #expect(read.frames.count == 2 && images[image] != nil)
     }
 }
+
+@Suite struct ShiftFramesTests {
+    let frames = (0..<6).map { _ in Frame(image: UUID()) }
+
+    @Test func movesOneFrameAlong() {
+        var list = frames
+        #expect(list.shift(ids: [frames[1].id], by: 1) == 1)
+        #expect(list.map(\.id) == [0, 2, 1, 3, 4, 5].map { frames[$0].id })
+    }
+
+    @Test func keepsGapsAndStopsAtTheEnds() {
+        var list = frames
+        // 1 and 3 moving 10 right stop when 3 reaches the end.
+        #expect(list.shift(ids: [frames[1].id, frames[3].id], by: 10) == 2)
+        #expect(list.map(\.id) == [0, 2, 4, 1, 5, 3].map { frames[$0].id })
+        #expect(list.shift(ids: [frames[0].id], by: -1) == 0)
+    }
+}

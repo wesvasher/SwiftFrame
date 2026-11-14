@@ -416,6 +416,22 @@ final class WindowModel: ObservableObject {
         }
     }
 
+    /// Whether the selection can move that way at all.
+    func canShiftSelection(by delta: Int) -> Bool {
+        let picked = frames.indices.filter { selection.contains(frames[$0].id) }
+        guard let first = picked.first, let last = picked.last else { return false }
+        return delta < 0 ? first > 0 : last < frames.count - 1
+    }
+
+    /// Moves the selected frames `delta` places along the timeline, animated.
+    func shiftSelection(by delta: Int) {
+        guard hasSelection, canShiftSelection(by: delta) else { return }
+        let ids = selection
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+            edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.shift(ids: ids, by: delta) }
+        }
+    }
+
     func changeHold(by delta: Int) {
         guard hasSelection else { return }
         let ids = selection

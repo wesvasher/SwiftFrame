@@ -136,6 +136,13 @@ private struct CaptureBar: View {
                     Button("Duplicate Frame", systemImage: "plus.square.on.square", action: model.duplicateSelection)
                         .disabled(!model.hasSelection)
                         .help("Duplicate the selected frame just after it (⌘D)")
+                    // Shift-click moves 10 frames.
+                    Button("Move Left", systemImage: "arrow.left") { model.shiftSelection(by: -shiftStep) }
+                        .disabled(!model.canShiftSelection(by: -1))
+                        .help("Move the selected frames one place left; Shift-click for 10 (⌥←, ⇧⌥←)")
+                    Button("Move Right", systemImage: "arrow.right") { model.shiftSelection(by: shiftStep) }
+                        .disabled(!model.canShiftSelection(by: 1))
+                        .help("Move the selected frames one place right; Shift-click for 10 (⌥→, ⇧⌥→)")
                 }
                 .labelStyle(.iconOnly)
                 .fixedSize()
@@ -160,6 +167,9 @@ private struct CaptureBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
     }
+
+    /// 10 places with Shift held, else 1.
+    private var shiftStep: Int { NSEvent.modifierFlags.contains(.shift) ? 10 : 1 }
 
     private var summary: String {
         let count = model.frames.count
