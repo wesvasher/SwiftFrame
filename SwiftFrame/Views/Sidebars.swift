@@ -1,9 +1,9 @@
 import SwiftUI
 
-// MARK: - Left sidebar: capture setup
-
-/// The left sidebar: which camera, and how capturing and playback behave.
-struct CaptureSidebar: View {
+/// The right sidebar: the selected frame (or frames), or the project when
+/// nothing is selected, then every capture setting, in sections that fold
+/// up like SwiftCut's inspector.
+struct FrameInspector: View {
     @ObservedObject var model: WindowModel
     @ObservedObject var camera: CameraController
 
@@ -13,33 +13,144 @@ struct CaptureSidebar: View {
     }
 
     var body: some View {
-        List {
-            Section("Camera") {
-                if camera.devices.isEmpty {
-                    Label("No cameras found", systemImage: "video.slash")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(camera.devices) { device in
-                    Button {
-                        model.selectCamera(device.id)
-                    } label: {
-                        Label {
-                            Text(device.name).lineLimit(1)
-                        } icon: {
-                            Image(systemName: device.id == camera.deviceID ? "checkmark.circle.fill" : "web.camera")
-                                .foregroundStyle(device.id == camera.deviceID ? Color.accentColor : .secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                Toggle("Mirror", isOn: Binding(get: { model.project.mirrorCamera }, set: model.setMirror))
-                CropPicker(model: model, camera: camera)
+        InspectorPanel {
+            let selected = model.frames.enumerated().filter { model.selection.contains($0.element.id) }
+            if selected.count == 1, let (index, frame) = selected.first {
+                single(frame, index: index)
+            } else if selected.count > 1 {
+                multiple(selected.map(\.element))
+            } else {
+                project
             }
-
+            cameraSection
             CameraShutterSection(remote: .shared)
+            focusPeakingSection
+            onionSkinSection
+            playbackSection
+        } footer: {
+            footer
+        }
+        .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
+    }
 
-            Section("Focus Peaking") {
-                Toggle("Focus Peaking", isOn: $model.focusPeaking.isOn)
+    // MARK: Selection
+
+    @ViewBuilder
+    private func single(_ frame: Frame, index: Int) -> some View {
+        InspectorSection("Frame") {
+            GridRow {
+                ZStack {
+                    Color.black
+                    FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
+                }
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .clipShape(.rect(cornerRadius: 6))
+                .gridCellColumns(2)
+            }
+            InspectorRow("Frame", "\(index + 1) of \(model.frames.count)")
+            InspectorRow("Starts at", time(model.frames.playbackStart(ofIndex: index)))
+            holdRow(frame.hold)
+        }
+    }
+
+    private func multiple(_ frames: [Frame]) -> some View {
+        InspectorSection("Selection") {
+            InspectorRow("Frames", "\(frames.count) selected")
+            InspectorRow("Length", time(frames.playbackLength))
+            let holds = Set(frames.map(\.hold))
+            holdRow(holds.count == 1 ? holds.first : nil)
+        }
+    }
+
+    private var project: some View {
+        InspectorSection("Project") {
+            InspectorRow("Frames", "\(model.frames.count)")
+            InspectorRow("Length", time(model.frames.playbackLength))
+            InspectorRow("Frame Rate", "\(model.project.framesPerSecond) fps")
+            GridRow {
+                Text("Click a frame in the timeline to inspect it.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .gridCellColumns(2)
+            }
+        }
+    }
+
+    /// Hold for the selection; `hold` is nil when the frames differ.
+    private func holdRow(_ hold: Int?) -> some View {
+        GridRow {
+            InspectorLabel("Hold")
+            Stepper {
+                Text(hold.map { $0 == 1 ? "1 frame" : "\($0) frames" } ?? "Mixed")
+            } onIncrement: {
+                model.changeHold(by: 1)
+            } onDecrement: {
+                model.changeHold(by: -1)
+            }
+        }
+    }
+
+    /// Frame actions when frames are selected.
+    @ViewBuilder private var footer: some View {
+        if model.selection.isEmpty {
+            Text(model.frames.isEmpty ? "No frames yet" : "No frames selected")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+        } else {
+            Button {
+                model.duplicateSelection()
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square").frame(maxWidth: .infinity)
+            }
+            if model.selection.count > 1 {
+                Button {
+                    model.reverseSelection()
+                } label: {
+                    Label("Reverse", systemImage: "arrow.left.arrow.right").frame(maxWidth: .infinity)
+                }
+            }
+            Button(role: .destructive) {
+                model.deleteSelection()
+            } label: {
+                Label("Delete", systemImage: "trash").frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: Settings
+
+    private var cameraSection: some View {
+        InspectorSection("Camera") {
+            GridRow {
+                InspectorLabel("Camera")
+                if camera.devices.isEmpty {
+                    Text("No cameras found").foregroundStyle(.secondary)
+                } else {
+                    Picker("Camera", selection: Binding(get: { camera.deviceID ?? "" },
+                                                        set: { model.selectCamera($0) })) {
+                        ForEach(camera.devices) { Text($0.name).tag($0.id) }
+                    }
+                    .labelsHidden()
+                }
+            }
+            GridRow {
+                InspectorLabel("Mirror")
+                Toggle("Mirror", isOn: Binding(get: { model.project.mirrorCamera }, set: model.setMirror))
+                    .labelsHidden()
+            }
+            CropPicker(model: model, camera: camera)
+        }
+    }
+
+    private var focusPeakingSection: some View {
+        InspectorSection("Focus Peaking") {
+            Toggle("Focus Peaking", isOn: $model.focusPeaking.isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .help("Show what's in focus (⇧⌘P)")
+        } content: {
+            GridRow {
+                InspectorLabel("Color")
                 Picker("Color", selection: $model.focusPeaking.tint) {
                     ForEach(FocusPeaking.Tint.allCases) { tint in
                         Label {
@@ -50,27 +161,45 @@ struct CaptureSidebar: View {
                         .tag(tint)
                     }
                 }
-                PeakingSensitivity(peaking: $model.focusPeaking)
-                    .disabled(!model.focusPeaking.isOn)
+                .labelsHidden()
             }
+            GridRow {
+                InspectorLabel("Sensitivity")
+                PeakingSensitivity(peaking: $model.focusPeaking)
+            }
+            .disabled(!model.focusPeaking.isOn)
+        }
+    }
 
-            Section("Onion Skin") {
+    private var onionSkinSection: some View {
+        InspectorSection("Onion Skin") {
+            GridRow {
+                InspectorLabel("Frames")
                 Stepper(value: Binding(get: { model.project.onionSkinFrames }, set: model.setOnionSkinFrames),
                         in: 0...5) {
-                    LabeledContent("Frames", value: model.project.onionSkinFrames == 0
-                                   ? "Off" : "\(model.project.onionSkinFrames)")
+                    Text(model.project.onionSkinFrames == 0 ? "Off" : "\(model.project.onionSkinFrames)")
+                        .monospacedDigit()
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Opacity \(Int((model.project.onionSkinOpacity * 100).rounded()))%")
-                        .foregroundStyle(model.project.onionSkinFrames == 0 ? .tertiary : .secondary)
+            }
+            GridRow {
+                InspectorLabel("Opacity")
+                HStack(spacing: 6) {
                     Slider(value: Binding(get: { model.project.onionSkinOpacity }, set: model.setOnionSkinOpacity),
                            in: 0.05...0.9)
                         .labelsHidden()
+                    Text("\(Int((model.project.onionSkinOpacity * 100).rounded()))%")
+                        .monospacedDigit()
+                        .frame(width: 34, alignment: .trailing)
                 }
-                .disabled(model.project.onionSkinFrames == 0)
             }
+            .disabled(model.project.onionSkinFrames == 0)
+        }
+    }
 
-            Section("Playback") {
+    private var playbackSection: some View {
+        InspectorSection("Playback") {
+            GridRow {
+                InspectorLabel("Frame Rate")
                 Picker("Frame Rate", selection: Binding(get: { model.project.framesPerSecond },
                                                        set: model.setFrameRate)) {
                     ForEach(Project.frameRates, id: \.self) { Text("\($0) fps").tag($0) }
@@ -79,95 +208,13 @@ struct CaptureSidebar: View {
                         Text("\(model.project.framesPerSecond) fps").tag(model.project.framesPerSecond)
                     }
                 }
+                .labelsHidden()
+            }
+            GridRow {
+                InspectorLabel("Loop")
                 Toggle("Loop", isOn: Binding(get: { model.project.loopPlayback }, set: model.setLoop))
+                    .labelsHidden()
             }
-        }
-        .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 320)
-    }
-}
-
-// MARK: - Right sidebar: inspector
-
-/// The right sidebar: the selected frame (or frames), or the project when
-/// nothing is selected.
-struct FrameInspector: View {
-    @ObservedObject var model: WindowModel
-
-    var body: some View {
-        Form {
-            let selected = model.frames.enumerated().filter { model.selection.contains($0.element.id) }
-            if selected.count == 1, let (index, frame) = selected.first {
-                single(frame, index: index)
-            } else if selected.count > 1 {
-                multiple(selected.map(\.element))
-            } else {
-                project
-            }
-        }
-        .formStyle(.grouped)
-        .inspectorColumnWidth(min: 220, ideal: 260, max: 360)
-    }
-
-    @ViewBuilder
-    private func single(_ frame: Frame, index: Int) -> some View {
-        Section {
-            ZStack {
-                Color.black
-                FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
-            }
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(.rect(cornerRadius: 6))
-            .listRowInsets(EdgeInsets())
-        }
-        Section("Frame") {
-            LabeledContent("Frame", value: "\(index + 1) of \(model.frames.count)")
-            LabeledContent("Starts at", value: time(model.frames.playbackStart(ofIndex: index)))
-            holdStepper(frame.hold)
-        }
-        actions
-    }
-
-    @ViewBuilder
-    private func multiple(_ frames: [Frame]) -> some View {
-        Section("Selection") {
-            LabeledContent("Frames", value: "\(frames.count) selected")
-            LabeledContent("Length", value: time(frames.playbackLength))
-            let holds = Set(frames.map(\.hold))
-            holdStepper(holds.count == 1 ? holds.first : nil)
-        }
-        actions
-    }
-
-    private var project: some View {
-        Section("Project") {
-            LabeledContent("Frames", value: "\(model.frames.count)")
-            LabeledContent("Length", value: time(model.frames.playbackLength))
-            LabeledContent("Frame Rate", value: "\(model.project.framesPerSecond) fps")
-            Text("Click a frame in the timeline to inspect it.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Hold for the selection; `hold` is nil when the frames differ.
-    private func holdStepper(_ hold: Int?) -> some View {
-        Stepper {
-            LabeledContent("Hold", value: hold.map { $0 == 1 ? "1 frame" : "\($0) frames" } ?? "Mixed")
-        } onIncrement: {
-            model.changeHold(by: 1)
-        } onDecrement: {
-            model.changeHold(by: -1)
-        }
-    }
-
-    private var actions: some View {
-        Section {
-            Button("Duplicate", systemImage: "plus.square.on.square") { model.duplicateSelection() }
-            if model.selection.count > 1 {
-                Button("Reverse Order", systemImage: "arrow.left.arrow.right") { model.reverseSelection() }
-            }
-            Button("Delete", systemImage: "trash", role: .destructive) { model.deleteSelection() }
         }
     }
 
@@ -182,53 +229,48 @@ struct FrameInspector: View {
 /// to a named preset (it says Custom between them).
 private struct PeakingSensitivity: View {
     @Binding var peaking: FocusPeaking
-    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Sensitivity")
-                .foregroundStyle(isEnabled ? .secondary : .tertiary)
-            HStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    Button {
-                        peaking.sensitivity -= 1
-                    } label: {
-                        Label("Less Sensitive", systemImage: "minus")
-                    }
-                    .disabled(peaking.sensitivity <= FocusPeaking.sensitivityRange.lowerBound)
-                    .help("Show only the sharpest edges")
-
-                    Text("\(peaking.sensitivity)")
-                        .font(.body.monospacedDigit().weight(.semibold))
-                        .frame(minWidth: 22)
-                        .accessibilityLabel("Sensitivity \(peaking.sensitivity)")
-
-                    Button {
-                        peaking.sensitivity += 1
-                    } label: {
-                        Label("More Sensitive", systemImage: "plus")
-                    }
-                    .disabled(peaking.sensitivity >= FocusPeaking.sensitivityRange.upperBound)
-                    .help("Show softer edges too")
+        HStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Button {
+                    peaking.sensitivity -= 1
+                } label: {
+                    Label("Less Sensitive", systemImage: "minus")
                 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.bordered)
-                .fixedSize()
+                .disabled(peaking.sensitivity <= FocusPeaking.sensitivityRange.lowerBound)
+                .help("Show only the sharpest edges")
 
-                Spacer(minLength: 0)
+                Text("\(peaking.sensitivity)")
+                    .font(.body.monospacedDigit().weight(.semibold))
+                    .frame(minWidth: 22)
+                    .accessibilityLabel("Sensitivity \(peaking.sensitivity)")
 
-                Menu(peaking.preset?.name ?? "Custom") {
-                    ForEach(FocusPeaking.Preset.allCases) { preset in
-                        Toggle(isOn: Binding(get: { peaking.preset == preset },
-                                             set: { _ in peaking.sensitivity = preset.rawValue })) {
-                            Text("\(preset.name) (\(preset.rawValue))")
-                        }
-                    }
+                Button {
+                    peaking.sensitivity += 1
+                } label: {
+                    Label("More Sensitive", systemImage: "plus")
                 }
-                .menuStyle(.button)
-                .fixedSize()
-                .help("Sensitivity presets")
+                .disabled(peaking.sensitivity >= FocusPeaking.sensitivityRange.upperBound)
+                .help("Show softer edges too")
             }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.bordered)
+            .fixedSize()
+
+            Spacer(minLength: 0)
+
+            Menu(peaking.preset?.name ?? "Custom") {
+                ForEach(FocusPeaking.Preset.allCases) { preset in
+                    Toggle(isOn: Binding(get: { peaking.preset == preset },
+                                         set: { _ in peaking.sensitivity = preset.rawValue })) {
+                        Text("\(preset.name) (\(preset.rawValue))")
+                    }
+                }
+            }
+            .menuStyle(.button)
+            .fixedSize()
+            .help("Sensitivity presets")
         }
     }
 }
@@ -239,14 +281,27 @@ private struct CameraShutterSection: View {
     @ObservedObject var remote: ShutterRemote
 
     var body: some View {
-        Section("Camera Shutter") {
+        InspectorSection("Camera Shutter") {
             Toggle("Fire Camera Shutter", isOn: $remote.isEnabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
                 .help("Press a Sony camera's shutter over Bluetooth with each capture")
-            if remote.isEnabled {
-                status
-                if let problem = remote.problem {
-                    Text(problem).font(.caption).foregroundStyle(.red)
+        } content: {
+            GridRow {
+                VStack(alignment: .leading, spacing: 6) {
+                    if remote.isEnabled {
+                        status
+                        if let problem = remote.problem {
+                            Text(problem).font(.caption).foregroundStyle(.red)
+                        }
+                    } else {
+                        Text("Press a Sony camera's shutter over Bluetooth with each capture, so it saves a full-size photo too.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .gridCellColumns(2)
             }
         }
     }
@@ -312,7 +367,8 @@ private struct CropPicker: View {
     @ObservedObject var camera: CameraController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        GridRow {
+            InspectorLabel("Crop")
             Picker("Crop", selection: Binding(get: { model.project.crop }, set: model.setCrop)) {
                 Text("Full Frame").tag(FrameCrop?.none)
                 Divider()
@@ -321,8 +377,12 @@ private struct CropPicker: View {
                     Text(crop.name).tag(Optional(crop))
                 }
             }
+            .labelsHidden()
             .help("Crop new frames to this shape from the middle of the picture, without squeezing it")
-            if let detail {
+        }
+        if let detail {
+            GridRow {
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
         }

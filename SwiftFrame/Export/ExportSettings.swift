@@ -91,8 +91,8 @@ struct ExportSettings: Codable, Equatable, Sendable {
         }
         let even = kind == .movie
         func round(_ v: Double) -> Int {
-            let r = max(2, Int(v.rounded()))
-            return even ? r & ~1 : r
+            // Even sizes round to the nearest even number: 853.3 → 854.
+            max(2, even ? Int((v / 2).rounded()) * 2 : Int(v.rounded()))
         }
         return (round(w), round(h))
     }

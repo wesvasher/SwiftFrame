@@ -14,28 +14,24 @@ struct CaptureWindow: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            CaptureSidebar(model: model)
-        } detail: {
-            VStack(spacing: 0) {
-                ViewerView(model: model)
-                    .frame(minWidth: 480, minHeight: 270)
-                Divider()
-                CaptureBar(model: model)
-                Divider()
-                FilmstripView(model: model)
-            }
-            .inspector(isPresented: $showsInspector) {
-                FrameInspector(model: model)
-                    .toolbar {
-                        Button {
-                            showsInspector.toggle()
-                        } label: {
-                            Label("Inspector", systemImage: "sidebar.right")
-                        }
-                        .help("Show or hide the inspector")
+        VStack(spacing: 0) {
+            ViewerView(model: model)
+                .frame(minWidth: 480, minHeight: 270)
+            Divider()
+            CaptureBar(model: model)
+            Divider()
+            FilmstripView(model: model)
+        }
+        .inspector(isPresented: $showsInspector) {
+            FrameInspector(model: model)
+                .toolbar {
+                    Button {
+                        showsInspector.toggle()
+                    } label: {
+                        Label("Inspector", systemImage: "sidebar.right")
                     }
-            }
+                    .help("Show or hide the inspector")
+                }
         }
         .toolbar { WindowToolbar(model: model) }
         .overlay {
