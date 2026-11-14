@@ -47,6 +47,8 @@ final class WindowModel: ObservableObject {
     /// Whether the live camera shows the onion skin (the timeline's Capture
     /// view) or just the plain camera. The project keeps its onion skin settings.
     @Published private(set) var showsOnionSkin = true
+    /// Playing full screen: the window fills the screen with just the animation.
+    @Published private(set) var isPlayingFullScreen = false
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -129,11 +131,33 @@ final class WindowModel: ObservableObject {
             if mode == .review, let id = current, let index = frames.firstIndex(of: id), index < frames.count - 1 {
                 startIndex = index
             }
-            let fps = Double(max(project.framesPerSecond, 1))
-            let offset = Double(frames.playbackStart(ofIndex: startIndex)) / fps
-            playbackStart = Date().addingTimeInterval(-offset)
-            mode = .playback
+            startPlayback(fromIndex: startIndex)
         }
+    }
+
+    /// Fills the screen with the animation and plays it from the start.
+    func playFullScreen() {
+        guard !frames.isEmpty else { return }
+        isPlayingFullScreen = true
+        startPlayback(fromIndex: 0)
+    }
+
+    /// Back to the window, paused where it was.
+    func endFullScreen() {
+        guard isPlayingFullScreen else { return }
+        isPlayingFullScreen = false
+        if mode == .playback { stopPlayback() }
+    }
+
+    func toggleFullScreenPlayback() {
+        if isPlayingFullScreen { endFullScreen() } else { playFullScreen() }
+    }
+
+    private func startPlayback(fromIndex index: Int) {
+        let fps = Double(max(project.framesPerSecond, 1))
+        let offset = Double(frames.playbackStart(ofIndex: index)) / fps
+        playbackStart = Date().addingTimeInterval(-offset)
+        mode = .playback
     }
 
     /// Where playback is at `date`: the frame showing, how far through its

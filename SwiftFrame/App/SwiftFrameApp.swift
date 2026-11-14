@@ -52,6 +52,13 @@ struct FrameCommands: Commands {
             Button(model?.mode == .playback ? "Pause" : "Play") { model?.togglePlayback() }
                 .keyboardShortcut(.space, modifiers: [])
                 .disabled(model?.frames.isEmpty ?? true)
+            // ⌘F again (or Escape) leaves full screen.
+            Button("Play Full Screen") { model?.toggleFullScreenPlayback() }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(model.map { !$0.isPlayingFullScreen && $0.frames.isEmpty } ?? true)
+            Button("Exit Full Screen Playback") { model?.endFullScreen() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(model?.isPlayingFullScreen != true)
             Button("Go Live") { model?.goLive() }
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(model == nil || model?.mode == .live)

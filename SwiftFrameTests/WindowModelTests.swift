@@ -203,3 +203,25 @@ import Testing
         #expect(model.project.onionSkinFrames == Project().onionSkinFrames)
     }
 }
+
+@MainActor @Suite struct FullScreenPlaybackTests {
+    @Test func playsFromTheStartAndPausesOnTheWayOut() {
+        let document = StopMotionDocument()
+        document.project.frames = [Frame(image: UUID()), Frame(image: UUID()), Frame(image: UUID())]
+        let model = WindowModel(document: document)
+        model.click(document.project.frames[1].id, modifiers: [])
+
+        model.playFullScreen()
+        #expect(model.isPlayingFullScreen && model.mode == .playback)
+        #expect(model.playbackPosition(at: Date())?.index == 0)
+
+        model.toggleFullScreenPlayback()
+        #expect(!model.isPlayingFullScreen && model.mode != .playback)
+    }
+
+    @Test func needsFrames() {
+        let model = WindowModel(document: StopMotionDocument())
+        model.playFullScreen()
+        #expect(!model.isPlayingFullScreen)
+    }
+}

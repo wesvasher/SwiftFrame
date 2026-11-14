@@ -4,6 +4,8 @@ import SwiftUI
 /// playback.
 struct ViewerView: View {
     @ObservedObject var model: WindowModel
+    /// Full screen playback: just the picture, no badge or zoom buttons.
+    var isFullScreen = false
     @State private var pinchStart: CGFloat?
     @State private var dragStart: CGSize?
 
@@ -29,8 +31,8 @@ struct ViewerView: View {
             model.viewerSize = size
             model.panViewer(to: model.viewerPan)
         }
-        .overlay(alignment: .topLeading) { ModeBadge(model: model).padding(12) }
-        .overlay(alignment: .bottomTrailing) { ViewerZoomControls(model: model).padding(12) }
+        .overlay(alignment: .topLeading) { if !isFullScreen { ModeBadge(model: model).padding(12) } }
+        .overlay(alignment: .bottomTrailing) { if !isFullScreen { ViewerZoomControls(model: model).padding(12) } }
         .overlay { if model.flash { Color.white.opacity(0.35).allowsHitTesting(false) } }
         .animation(.easeOut(duration: 0.12), value: model.flash)
         .clipped()

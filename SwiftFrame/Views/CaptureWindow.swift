@@ -38,6 +38,15 @@ struct CaptureWindow: View {
             }
         }
         .toolbar { WindowToolbar(model: model) }
+        .overlay {
+            // Full screen playback covers the whole window with the animation.
+            if model.isPlayingFullScreen {
+                ViewerView(model: model, isFullScreen: true)
+                    .ignoresSafeArea()
+            }
+        }
+        .toolbar(model.isPlayingFullScreen ? .hidden : .visible, for: .windowToolbar)
+        .background(FullScreenWindow(isOn: model.isPlayingFullScreen, onExit: { model.endFullScreen() }))
         .focusedSceneObject(model)
         .background(WindowKeyMonitor(onSpace: { model.togglePlayback() }, onCommandTap: { model.capture() }))
         .task { await model.startCamera() }
@@ -203,13 +212,12 @@ private struct WindowToolbar: ToolbarContent {
             .help("Loop playback")
 
             Button {
-                model.togglePlayback()
+                model.playFullScreen()
             } label: {
-                Label(model.mode == .playback ? "Pause" : "Play",
-                      systemImage: model.mode == .playback ? "pause.fill" : "play.fill")
+                Label("Play Full Screen", systemImage: "play.display")
             }
             .disabled(model.frames.isEmpty)
-            .help("Play or pause the animation (Space)")
+            .help("Play the animation full screen (⌘F)")
 
             Button {
                 model.exportMovie()
@@ -405,5 +413,63 @@ private struct FrameRateSwitch: View {
             Text("Any rate from 1 to 60 frames per second.").font(.caption).foregroundStyle(.secondary)
         }
         .padding(14)
+    }
+}
+
+/// Puts the window in full screen while `isOn`, and back out after, unless
+/// it was already full screen. Leaving full screen another way (the green
+/// button, Escape, ⌃⌘F) calls `onExit`.
+private struct FullScreenWindow: NSViewRepresentable {
+    let isOn: Bool
+    let onExit: () -> Void
+
+    func makeNSView(context: Context) -> WatcherView { WatcherView() }
+
+    func updateNSView(_ view: WatcherView, context: Context) {
+        view.onExit = onExit
+        view.setFullScreen(isOn)
+    }
+
+    final class WatcherView: NSView {
+        var onExit: () -> Void = {}
+        private var wanted = false
+        /// Whether going full screen was ours to undo.
+        private var entered = false
+        private var observer: NSObjectProtocol?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            observer = nil
+            guard let window else { return }
+            observer = NotificationCenter.default.addObserver(
+                forName: NSWindow.didExitFullScreenNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.entered = false
+                    if self.wanted { self.onExit() }
+                }
+            }
+            if wanted { apply() }
+        }
+
+        func setFullScreen(_ on: Bool) {
+            guard on != wanted else { return }
+            wanted = on
+            apply()
+        }
+
+        private func apply() {
+            guard let window else { return }
+            let isFull = window.styleMask.contains(.fullScreen)
+            if wanted, !isFull {
+                entered = true
+                window.toggleFullScreen(nil)
+            } else if !wanted, isFull, entered {
+                entered = false
+                window.toggleFullScreen(nil)
+            }
+        }
     }
 }
