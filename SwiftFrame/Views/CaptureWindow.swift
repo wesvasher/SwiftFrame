@@ -6,6 +6,7 @@ struct CaptureWindow: View {
     @StateObject private var model: WindowModel
     @Environment(\.undoManager) private var undoManager
     @SceneStorage("showsInspector") private var showsInspector = true
+    @SceneStorage("showsRecycleBin") private var showsRecycleBin = true
     let fileURL: URL?
 
     init(document: StopMotionDocument, fileURL: URL?) {
@@ -14,24 +15,31 @@ struct CaptureWindow: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ViewerView(model: model)
-                .frame(minWidth: 480, minHeight: 270)
-            Divider()
-            CaptureBar(model: model)
-            Divider()
-            FilmstripView(model: model)
-        }
-        .inspector(isPresented: $showsInspector) {
-            FrameInspector(model: model)
-                .toolbar {
-                    Button {
-                        showsInspector.toggle()
-                    } label: {
-                        Label("Inspector", systemImage: "sidebar.right")
+        NavigationSplitView(columnVisibility: Binding(
+            get: { showsRecycleBin ? .all : .detailOnly },
+            set: { showsRecycleBin = $0 != .detailOnly })
+        ) {
+            RecycleBinSidebar(model: model)
+        } detail: {
+            VStack(spacing: 0) {
+                ViewerView(model: model)
+                    .frame(minWidth: 480, minHeight: 270)
+                Divider()
+                CaptureBar(model: model)
+                Divider()
+                FilmstripView(model: model)
+            }
+            .inspector(isPresented: $showsInspector) {
+                FrameInspector(model: model)
+                    .toolbar {
+                        Button {
+                            showsInspector.toggle()
+                        } label: {
+                            Label("Inspector", systemImage: "sidebar.right")
+                        }
+                        .help("Show or hide the inspector")
                     }
-                    .help("Show or hide the inspector")
-                }
+            }
         }
         .toolbar { WindowToolbar(model: model) }
         .overlay {
@@ -143,6 +151,9 @@ private struct CaptureBar: View {
                     Button("Move Right", systemImage: "arrow.right") { model.shiftSelection(by: shiftStep) }
                         .disabled(!model.canShiftSelection(by: 1))
                         .help("Move the selected frames one place right; Shift-click for 10 (⌥→, ⇧⌥→)")
+                    Button("Delete", systemImage: "trash", action: model.deleteSelection)
+                        .disabled(!model.hasSelection)
+                        .help("Move the selected frames to the Recycle Bin in the left sidebar (Delete)")
                 }
                 .labelStyle(.iconOnly)
                 .fixedSize()

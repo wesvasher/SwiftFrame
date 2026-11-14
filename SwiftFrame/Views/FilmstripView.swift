@@ -159,7 +159,9 @@ struct FilmstripContent: View {
             ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
                 FrameCell(model: model, frame: frame, number: index + 1)
                     .id(frame.id)
-                    .transition(model.newCopies.contains(frame.id) ? copyTransition : .identity)
+                    // Copies slide out from their originals; frames going to or
+                    // coming back from the recycle bin shrink and fade.
+                    .transition(model.newCopies.contains(frame.id) ? copyTransition : binTransition)
             }
             // Room for the pinned Capture tile, so the last frame can scroll
             // out from under it. Dropping here moves to the end.
@@ -188,6 +190,10 @@ struct FilmstripContent: View {
     /// A new copy starts on top of its original, a little smaller, and slides
     /// out into its place as the frames after it move over. Just a fade with
     /// Reduce Motion on.
+    private var binTransition: AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity)
+    }
+
     private var copyTransition: AnyTransition {
         if reduceMotion { return .opacity }
         let count = CGFloat(max(1, model.newCopies.count))
@@ -663,7 +669,7 @@ private struct FrameMenuItems: View {
         Button("Move to End", systemImage: "arrow.right.to.line") { act { model.moveSelection(toStart: false) } }
         Button("Insert Pictures Before…", systemImage: "photo.badge.plus") { model.importImages(before: clicked) }
         Divider()
-        Button("Delete", systemImage: "trash", role: .destructive) { act { model.deleteSelection() } }
+        Button("Move to Recycle Bin", systemImage: "trash", role: .destructive) { act { model.deleteSelection() } }
     }
 
     private func act(_ action: () -> Void) {

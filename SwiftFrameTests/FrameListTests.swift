@@ -139,3 +139,39 @@ import Testing
         #expect(list.shift(ids: [frames[0].id], by: -1) == 0)
     }
 }
+
+@Suite struct RecycleBinTests {
+    func project(_ n: Int) -> Project {
+        var project = Project()
+        project.frames = (0..<n).map { _ in Frame(image: UUID()) }
+        return project
+    }
+
+    @Test func deletedFramesGoToTheBinAndComeBackInPlace() {
+        var project = project(5)
+        let ids = project.frames.map(\.id)
+        let next = project.moveToBin(ids: [ids[1], ids[3]])
+        #expect(next == ids[4])
+        #expect(project.frames.map(\.id) == [ids[0], ids[2], ids[4]])
+        #expect(project.recycleBin.map(\.index) == [1, 3])
+        project.restoreFromBin(ids: [ids[1], ids[3]])
+        #expect(project.frames.map(\.id) == ids && project.recycleBin.isEmpty)
+    }
+
+    @Test func binPicturesAreSaved() throws {
+        var project = project(2)
+        let gone = project.frames[0]
+        project.moveToBin(ids: [gone.id])
+        let images = Dictionary(uniqueKeysWithValues: [gone.image, project.frames[0].image].map { ($0, Data([1])) })
+        let wrapper = try StopMotionDocument.fileWrapper(for: .init(project: project, images: images), existing: nil)
+        let (read, readImages) = try StopMotionDocument.read(wrapper)
+        #expect(read.recycleBin.map(\.id) == [gone.id])
+        #expect(readImages[gone.image] != nil)
+    }
+
+    @Test func oldProjectsWithoutABinStillOpen() throws {
+        let json = #"{"version":1,"frames":[],"framesPerSecond":12,"onionSkinFrames":1,"onionSkinOpacity":0.4,"mirrorCamera":false,"loopPlayback":true}"#
+        let project = try JSONDecoder().decode(Project.self, from: Data(json.utf8))
+        #expect(project.recycleBin.isEmpty)
+    }
+}

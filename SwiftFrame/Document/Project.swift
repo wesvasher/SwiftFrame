@@ -17,6 +17,17 @@ struct Frame: Identifiable, Codable, Hashable, Sendable {
     static let holdRange = 1...99
 }
 
+/// A deleted frame waiting in the recycle bin, with where it was so it can
+/// go back there.
+struct BinnedFrame: Identifiable, Codable, Hashable, Sendable {
+    var frame: Frame
+    /// Its place in the timeline when it was deleted.
+    var index: Int
+    var deleted: Date
+
+    var id: UUID { frame.id }
+}
+
 /// Everything in a project except the pictures: saved as Project.json.
 struct Project: Codable, Equatable, Sendable {
     var version = 1
@@ -31,6 +42,45 @@ struct Project: Codable, Equatable, Sendable {
     var cameraID: String?
     /// What new captures are cropped to; nil keeps the camera's whole picture.
     var crop: FrameCrop?
+    /// Saved as optional, so projects from before the bin still open.
+    private var bin: [BinnedFrame]?
+
+    /// Deleted frames, oldest first, until the bin is emptied.
+    var recycleBin: [BinnedFrame] {
+        get { bin ?? [] }
+        set { bin = newValue.isEmpty ? nil : newValue }
+    }
+
+    /// Every picture the project needs: the timeline's and the bin's.
+    var imagesInUse: Set<UUID> {
+        Set(frames.map(\.image)).union(recycleBin.map(\.frame.image))
+    }
+
+    /// Moves the frames from the timeline to the recycle bin. Returns the
+    /// frame to select afterwards.
+    @discardableResult
+    mutating func moveToBin(ids: Set<UUID>, at date: Date = Date()) -> UUID? {
+        let binned = frames.enumerated()
+            .filter { ids.contains($0.element.id) }
+            .map { BinnedFrame(frame: $0.element, index: $0.offset, deleted: date) }
+        let next = frames.remove(ids: ids)
+        recycleBin += binned
+        return next
+    }
+
+    /// Puts frames from the bin back where they were (or as near as the
+    /// timeline now allows). Returns their ids.
+    @discardableResult
+    mutating func restoreFromBin(ids: Set<UUID>) -> [UUID] {
+        let back = recycleBin.filter { ids.contains($0.id) }.sorted { $0.index < $1.index }
+        recycleBin.removeAll { ids.contains($0.id) }
+        for item in back { frames.insert(item.frame, at: Swift.min(Swift.max(item.index, 0), frames.count)) }
+        return back.map(\.id)
+    }
+
+    mutating func deleteFromBin(ids: Set<UUID>) {
+        recycleBin.removeAll { ids.contains($0.id) }
+    }
 
     static let frameRates = [6, 8, 10, 12, 15, 24, 25, 30]
 

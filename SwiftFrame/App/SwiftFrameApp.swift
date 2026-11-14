@@ -106,7 +106,7 @@ struct FrameCommands: Commands {
                 .disabled(model?.hasSelection != true)
             Button("Reverse Order") { model?.reverseSelection() }
                 .disabled((model?.selection.count ?? 0) < 2)
-            Button("Delete") { model?.deleteSelection() }
+            Button("Move to Recycle Bin") { model?.deleteSelection() }
                 .keyboardShortcut(.delete, modifiers: [])
                 .disabled(model?.hasSelection != true)
             Divider()

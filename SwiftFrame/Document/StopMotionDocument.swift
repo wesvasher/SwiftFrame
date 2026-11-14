@@ -76,7 +76,7 @@ final class StopMotionDocument: ReferenceFileDocument, @unchecked Sendable {
 
         let old = existing?.fileWrappers?[framesFolder]?.fileWrappers ?? [:]
         var frames: [String: FileWrapper] = [:]
-        for id in Set(snapshot.project.frames.map(\.image)) {
+        for id in snapshot.project.imagesInUse {
             let name = "\(id.uuidString).jpg"
             if let reused = old[name], reused.isRegularFile {
                 // Already named; renaming a wrapper that's still in the open

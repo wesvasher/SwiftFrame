@@ -389,12 +389,47 @@ final class WindowModel: ObservableObject {
 
     // MARK: - Editing
 
+    /// Moves the selected frames to the recycle bin, animated.
     func deleteSelection() {
         guard hasSelection else { return }
         let ids = selection
         var next: UUID?
-        edit(ids.count == 1 ? "Delete Frame" : "Delete Frames") { next = $0.frames.remove(ids: ids) }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+            edit(ids.count == 1 ? "Move Frame to Recycle Bin" : "Move Frames to Recycle Bin") {
+                next = $0.moveToBin(ids: ids)
+            }
+        }
         if let next { select(next) } else { goLive() }
+    }
+
+    // MARK: - Recycle bin
+
+    var recycleBin: [BinnedFrame] { project.recycleBin }
+
+    /// Puts frames from the bin back where they were, and selects them.
+    func restoreFromBin(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        var restored: [UUID] = []
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+            edit(ids.count == 1 ? "Put Back Frame" : "Put Back Frames") { restored = $0.restoreFromBin(ids: ids) }
+            if !restored.isEmpty {
+                selection = Set(restored)
+                current = restored.last
+                mode = .review
+            }
+        }
+    }
+
+    /// Deletes frames from the bin for good (undo still brings them back
+    /// until the window closes).
+    func deleteFromBin(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        edit(ids.count == 1 ? "Delete Frame" : "Delete Frames") { $0.deleteFromBin(ids: ids) }
+    }
+
+    func emptyRecycleBin() {
+        guard !recycleBin.isEmpty else { return }
+        edit("Empty Recycle Bin") { $0.recycleBin = [] }
     }
 
     /// The copies the last Duplicate made, so the filmstrip can slide them
