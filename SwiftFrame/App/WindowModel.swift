@@ -32,10 +32,9 @@ final class WindowModel: ObservableObject {
     @Published var exportProgress: Double?
     @Published var errorMessage: String?
     /// The width of the filmstrip's frames, from `thumbnailWidths`; their
-    /// height never changes. New windows start at the width last chosen.
-    @Published private(set) var thumbnailWidth: CGFloat =
-        WindowModel.thumbnailWidths.contains(CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")))
-        ? CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth")) : 112
+    /// height never changes. New projects start at 4:3; opened ones at the
+    /// width last chosen.
+    @Published private(set) var thumbnailWidth: CGFloat
     /// How far the viewer is zoomed in on the picture: 1 fits the whole picture.
     @Published private(set) var viewerZoom: CGFloat = 1
     /// How far the zoomed picture is moved from the middle, in points.
@@ -52,8 +51,10 @@ final class WindowModel: ObservableObject {
 
     private var cancellables: Set<AnyCancellable> = []
 
-    init(document: StopMotionDocument) {
+    init(document: StopMotionDocument, isNew: Bool = true) {
         self.document = document
+        let saved = CGFloat(UserDefaults.standard.double(forKey: "FilmstripThumbnailWidth"))
+        thumbnailWidth = !isNew && Self.thumbnailWidths.contains(saved) ? saved : Self.standardThumbnailWidth
         // Menu commands and the filmstrip watch this model; pass on the
         // document's and camera's changes.
         document.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }.store(in: &cancellables)
@@ -203,7 +204,9 @@ final class WindowModel: ObservableObject {
 
     // MARK: - Filmstrip zoom
 
-    static let thumbnailWidths: [CGFloat] = [24, 40, 64, 112, 168, 240]
+    /// 4:3, the shape of most camera pictures, at the filmstrip's height.
+    static let standardThumbnailWidth: CGFloat = 84   // 63 × 4 / 3; FrameCell.thumbnailHeight is 63
+    static let thumbnailWidths: [CGFloat] = [24, 40, 64, standardThumbnailWidth, 112, 168, 240]
 
     var canZoomInTimeline: Bool { thumbnailWidth < Self.thumbnailWidths.last! }
     var canZoomOutTimeline: Bool { thumbnailWidth > Self.thumbnailWidths.first! }

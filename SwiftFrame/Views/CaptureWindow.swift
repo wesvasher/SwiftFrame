@@ -9,7 +9,7 @@ struct CaptureWindow: View {
     let fileURL: URL?
 
     init(document: StopMotionDocument, fileURL: URL?) {
-        _model = StateObject(wrappedValue: WindowModel(document: document))
+        _model = StateObject(wrappedValue: WindowModel(document: document, isNew: fileURL == nil))
         self.fileURL = fileURL
     }
 

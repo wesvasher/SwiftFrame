@@ -12,16 +12,18 @@ import Testing
         UserDefaults.standard.removeObject(forKey: "FilmstripThumbnailWidth")
 
         let model = WindowModel(document: StopMotionDocument())
-        #expect(model.thumbnailWidth == 112)
+        // New projects start at 4:3 for the 63-point-high thumbnails.
+        #expect(model.thumbnailWidth == 84)
         model.zoomInTimeline()
-        #expect(model.thumbnailWidth == 168)
+        #expect(model.thumbnailWidth == 112)
         for _ in 0..<10 { model.zoomInTimeline() }
         #expect(model.thumbnailWidth == 240 && !model.canZoomInTimeline)
         for _ in 0..<10 { model.zoomOutTimeline() }
         #expect(model.thumbnailWidth == 24 && !model.canZoomOutTimeline)
 
-        // New windows start at the last size chosen.
-        #expect(WindowModel(document: StopMotionDocument()).thumbnailWidth == 24)
+        // Opened projects start at the last size chosen; new ones at 4:3.
+        #expect(WindowModel(document: StopMotionDocument(), isNew: false).thumbnailWidth == 24)
+        #expect(WindowModel(document: StopMotionDocument()).thumbnailWidth == 84)
     }
 }
 
