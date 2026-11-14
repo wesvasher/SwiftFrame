@@ -175,3 +175,16 @@ import Testing
         #expect(project.recycleBin.isEmpty)
     }
 }
+
+@Suite struct CopyFramesTests {
+    @Test func copiesGoBeforeTheTarget() {
+        let frames = (0..<4).map { _ in Frame(image: UUID()) }
+        var list = frames
+        let copies = list.copy(ids: [frames[0].id, frames[2].id], before: frames[1].id)
+        #expect(list.count == 6)
+        #expect(list.map(\.image) == [0, 0, 2, 1, 2, 3].map { frames[$0].image })
+        #expect(copies == [list[1].id, list[2].id])
+        list.copy(ids: [frames[3].id], before: nil)
+        #expect(list.last?.image == frames[3].image)
+    }
+}

@@ -194,14 +194,24 @@ struct FilmstripContent: View {
         reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity)
     }
 
+    /// Duplicates slide out from under their originals; Option-dragged
+    /// copies pop up where they're dropped. Both grow from small, so the
+    /// bouncy animation overshoots a little as they land.
     private var copyTransition: AnyTransition {
         if reduceMotion { return .opacity }
-        let count = CGFloat(max(1, model.newCopies.count))
-        return .asymmetric(
-            insertion: .offset(x: -FilmstripLayout.stride(model.thumbnailWidth) * count)
-                .combined(with: .scale(scale: 0.85))
-                .combined(with: .opacity),
-            removal: .opacity)
+        switch model.copyStyle {
+        case .slide:
+            let count = CGFloat(max(1, model.newCopies.count))
+            return .asymmetric(
+                insertion: .offset(x: -FilmstripLayout.stride(model.thumbnailWidth) * count)
+                    .combined(with: .scale(scale: 0.7))
+                    .combined(with: .opacity),
+                removal: .opacity)
+        case .pop:
+            return .asymmetric(
+                insertion: .scale(scale: 0.3, anchor: .bottom).combined(with: .opacity),
+                removal: .opacity)
+        }
     }
 }
 
@@ -713,11 +723,13 @@ enum FrameDrop: Transferable {
 extension WindowModel {
     func handleDrop(_ items: [FrameDrop], before target: UUID?) -> Bool {
         var files: [URL] = []
+        // Holding Option when letting go copies instead of moving, as in Finder.
+        let copies = NSEvent.modifierFlags.contains(.option)
         for item in items {
             switch item {
             case .frame(let id):
                 guard frames.contains(where: { $0.id == id }) else { continue }
-                move(dragged: id, before: target)
+                if copies { copy(dragged: id, before: target) } else { move(dragged: id, before: target) }
             case .file(let url):
                 files.append(url)
             }

@@ -392,6 +392,10 @@ final class WindowModel: ObservableObject {
     /// Moves the selected frames to the recycle bin, animated.
     /// How timeline edits move frames around: a quick spring.
     static let frameAnimation = Animation.spring(response: 0.32, dampingFraction: 0.85)
+    /// Moving frames: the same, with a little bounce as they land.
+    static let moveAnimation = Animation.bouncy(duration: 0.38, extraBounce: 0.12)
+    /// New copies: a fun, bigger bounce.
+    static let copyAnimation = Animation.bouncy(duration: 0.45, extraBounce: 0.22)
 
     func deleteSelection() {
         guard hasSelection else { return }
@@ -439,15 +443,21 @@ final class WindowModel: ObservableObject {
     /// out from under their originals.
     @Published private(set) var newCopies: Set<UUID> = []
 
+    /// How new copies arrive: sliding out from their originals (Duplicate),
+    /// or popping in where they were dropped (Option-drag).
+    enum CopyStyle { case slide, pop }
+    @Published private(set) var copyStyle = CopyStyle.slide
+
     /// Copies the selected frames to just after the last of them, animated:
     /// the copies slide out from under the originals and the frames after
     /// them make room.
     func duplicateSelection() {
         guard hasSelection else { return }
         let ids = selection
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+        withAnimation(Self.copyAnimation) {
             var copies: [UUID] = []
             edit(ids.count == 1 ? "Duplicate Frame" : "Duplicate Frames") { copies = $0.frames.duplicate(ids: ids) }
+            copyStyle = .slide
             newCopies = Set(copies)
             selection = Set(copies)
             current = copies.last
@@ -465,7 +475,7 @@ final class WindowModel: ObservableObject {
     func shiftSelection(by delta: Int) {
         guard hasSelection, canShiftSelection(by: delta) else { return }
         let ids = selection
-        withAnimation(Self.frameAnimation) {
+        withAnimation(Self.moveAnimation) {
             edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.shift(ids: ids, by: delta) }
         }
     }
@@ -487,8 +497,23 @@ final class WindowModel: ObservableObject {
     /// The moved frames slide to their new place and the others make room.
     func move(dragged: UUID, before target: UUID?) {
         let ids = selection.contains(dragged) ? selection : [dragged]
-        withAnimation(Self.frameAnimation) {
+        withAnimation(Self.moveAnimation) {
             edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
+        }
+    }
+
+    /// Option-drag and drop: copies the dragged frame (or the whole
+    /// selection, if it's part of it) to just before `target`, or the end.
+    func copy(dragged: UUID, before target: UUID?) {
+        let ids = selection.contains(dragged) ? selection : [dragged]
+        withAnimation(Self.copyAnimation) {
+            var copies: [UUID] = []
+            edit(ids.count == 1 ? "Copy Frame" : "Copy Frames") { copies = $0.frames.copy(ids: ids, before: target) }
+            copyStyle = .pop
+            newCopies = Set(copies)
+            selection = Set(copies)
+            current = copies.last
+            mode = .review
         }
     }
 
@@ -497,7 +522,7 @@ final class WindowModel: ObservableObject {
         guard hasSelection else { return }
         let ids = selection
         let target = toStart ? frames.first(where: { !ids.contains($0.id) })?.id : nil
-        withAnimation(Self.frameAnimation) {
+        withAnimation(Self.moveAnimation) {
             edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
         }
     }

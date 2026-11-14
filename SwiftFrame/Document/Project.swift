@@ -177,6 +177,16 @@ extension Array where Element == Frame {
         return delta
     }
 
+    /// Copies the frames, in order, to just before `target` (or the end when
+    /// `target` is nil). Returns the copies' ids.
+    @discardableResult
+    mutating func copy(ids: Set<UUID>, before target: UUID?) -> [UUID] {
+        let copies = filter { ids.contains($0.id) }.map { Frame(image: $0.image, hold: $0.hold) }
+        guard !copies.isEmpty else { return [] }
+        insert(contentsOf: copies, at: target.flatMap { firstIndex(of: $0) } ?? count)
+        return copies.map(\.id)
+    }
+
     /// Moves the frames, keeping their order, to just before `target` (or to
     /// the end when `target` is nil). Dropping on a moved frame puts them
     /// before the next frame that isn't moving.

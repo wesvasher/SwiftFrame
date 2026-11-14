@@ -33,6 +33,7 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 | ⌥X | Play all frames again (clear in and out) |
 | ⌘L | Go live |
 | ⌘D | Duplicate selected frames |
+| ⌥-drag | Copy frames to where they're dropped |
 | ⌥← / ⌥→ | Move selected frames one place left / right (add ⇧ for 10) |
 | ⌘] / ⌘[ | Hold longer / shorter |
 | Delete | Move selected frames to the recycle bin (left sidebar) |
