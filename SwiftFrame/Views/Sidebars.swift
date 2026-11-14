@@ -35,6 +35,8 @@ struct CaptureSidebar: View {
                 Toggle("Mirror", isOn: Binding(get: { model.project.mirrorCamera }, set: model.setMirror))
             }
 
+            CameraShutterSection(remote: .shared)
+
             Section("Focus Peaking") {
                 Toggle("Focus Peaking", isOn: $model.focusPeaking.isOn)
                 Picker("Color", selection: $model.focusPeaking.tint) {
@@ -227,5 +229,78 @@ private struct PeakingSensitivity: View {
                 .help("Sensitivity presets")
             }
         }
+    }
+}
+
+/// Fire a Sony camera's shutter over Bluetooth with each capture, so the
+/// camera saves a full-size photo while SwiftFrame captures its HDMI video.
+private struct CameraShutterSection: View {
+    @ObservedObject var remote: ShutterRemote
+
+    var body: some View {
+        Section("Camera Shutter") {
+            Toggle("Fire Camera Shutter", isOn: $remote.isEnabled)
+                .help("Press a Sony camera's shutter over Bluetooth with each capture")
+            if remote.isEnabled {
+                status
+                if let problem = remote.problem {
+                    Text(problem).font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var status: some View {
+        switch remote.state {
+        case .off:
+            EmptyView()
+        case .unavailable(let message):
+            Label {
+                Text(message).font(.caption)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+            }
+            if remote.savedCameraName != nil { forgetButton }
+        case .searching:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Looking for cameras…").foregroundStyle(.secondary)
+                }
+                Text("On the camera: Network › Bluetooth › Bluetooth Function and Bluetooth Rmt Ctrl On, then Pairing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(remote.found) { camera in
+                Button {
+                    remote.connect(to: camera.id)
+                } label: {
+                    Label("Pair \(camera.name)", systemImage: "camera")
+                }
+            }
+        case .connecting(let name):
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Waiting for \(name)…").foregroundStyle(.secondary).lineLimit(2)
+            }
+            .help("Turn the camera on, with Bluetooth Rmt Ctrl on. Pairing the first time: accept it on the camera.")
+            forgetButton
+        case .connected(let name):
+            Label {
+                Text(name).lineLimit(1)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            }
+            HStack {
+                Button("Test Shutter") { remote.fire() }
+                forgetButton
+            }
+        }
+    }
+
+    private var forgetButton: some View {
+        Button("Forget Camera") { remote.forget() }
+            .help("Unpair this camera, to pair another")
     }
 }

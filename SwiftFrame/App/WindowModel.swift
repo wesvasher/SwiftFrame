@@ -99,6 +99,9 @@ final class WindowModel: ObservableObject {
         selection = []
         current = nil
         mode = .live
+        // The picture's already taken from the camera's video, before the
+        // shutter blanks it, so the camera's own photo follows.
+        if ShutterRemote.shared.isEnabled { ShutterRemote.shared.fire() }
         guard GeneralSettings.flashOnCapture else { return }
         flash = true
         Task {

@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppAppearance.saved.apply()
+        ShutterRemote.shared.startIfEnabled()
         // Opening a project from Finder arrives first; otherwise start a new one.
         DispatchQueue.main.async {
             if NSDocumentController.shared.documents.isEmpty {
