@@ -344,13 +344,23 @@ final class WindowModel: ObservableObject {
         if let next { select(next) } else { goLive() }
     }
 
+    /// The copies the last Duplicate made, so the filmstrip can slide them
+    /// out from under their originals.
+    @Published private(set) var newCopies: Set<UUID> = []
+
+    /// Copies the selected frames to just after the last of them, animated:
+    /// the copies slide out from under the originals and the frames after
+    /// them make room.
     func duplicateSelection() {
         guard hasSelection else { return }
         let ids = selection
-        var copies: [UUID] = []
-        edit(ids.count == 1 ? "Duplicate Frame" : "Duplicate Frames") { copies = $0.frames.duplicate(ids: ids) }
-        selection = Set(copies)
-        current = copies.last
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            var copies: [UUID] = []
+            edit(ids.count == 1 ? "Duplicate Frame" : "Duplicate Frames") { copies = $0.frames.duplicate(ids: ids) }
+            newCopies = Set(copies)
+            selection = Set(copies)
+            current = copies.last
+        }
     }
 
     func changeHold(by delta: Int) {

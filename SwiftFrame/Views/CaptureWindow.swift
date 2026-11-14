@@ -131,6 +131,15 @@ private struct CaptureBar: View {
                     ProgressView(value: progress).frame(width: 90)
                     Text("Exporting…").font(.callout).foregroundStyle(.secondary)
                 }
+                // Timeline editing buttons.
+                ControlGroup {
+                    Button("Duplicate Frame", systemImage: "plus.square.on.square", action: model.duplicateSelection)
+                        .disabled(!model.hasSelection)
+                        .help("Duplicate the selected frame just after it (⌘D)")
+                }
+                .labelStyle(.iconOnly)
+                .fixedSize()
+
                 ControlGroup {
                     Button("Zoom Out", systemImage: "minus.magnifyingglass", action: model.zoomOutTimeline)
                         .disabled(!model.canZoomOutTimeline)

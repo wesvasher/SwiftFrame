@@ -152,12 +152,14 @@ private struct NavigatorOverview: View {
 /// and playhead over them.
 struct FilmstripContent: View {
     @ObservedObject var model: WindowModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         LazyHStack(spacing: FilmstripLayout.spacing(model.thumbnailWidth)) {
             ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
                 FrameCell(model: model, frame: frame, number: index + 1)
                     .id(frame.id)
+                    .transition(model.newCopies.contains(frame.id) ? copyTransition : .identity)
             }
             // Room for the pinned Capture tile, so the last frame can scroll
             // out from under it. Dropping here moves to the end.
@@ -173,6 +175,19 @@ struct FilmstripContent: View {
             if !model.frames.isEmpty { Playhead(model: model) }
         }
         .coordinateSpace(.named(FilmstripLayout.space))
+    }
+
+    /// A new copy starts on top of its original, a little smaller, and slides
+    /// out into its place as the frames after it move over. Just a fade with
+    /// Reduce Motion on.
+    private var copyTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        let count = CGFloat(max(1, model.newCopies.count))
+        return .asymmetric(
+            insertion: .offset(x: -FilmstripLayout.stride(model.thumbnailWidth) * count)
+                .combined(with: .scale(scale: 0.85))
+                .combined(with: .opacity),
+            removal: .opacity)
     }
 }
 
