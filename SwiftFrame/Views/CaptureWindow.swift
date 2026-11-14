@@ -190,6 +190,13 @@ private struct WindowToolbar: ToolbarContent {
         }
 
         ToolbarItemGroup {
+            Toggle(isOn: Binding(get: { model.showsOnionSkin }, set: model.setShowsOnionSkin)) {
+                Label("Onion Skin", systemImage: "square.3.layers.3d")
+            }
+            .help(model.showsOnionSkin
+                  ? "Showing the onion skin over the camera. Click for the plain camera (⇧⌘O)"
+                  : "Showing the plain camera. Click to show the onion skin (⇧⌘O)")
+
             Toggle(isOn: Binding(get: { model.project.loopPlayback }, set: model.setLoop)) {
                 Label("Loop", systemImage: "repeat")
             }

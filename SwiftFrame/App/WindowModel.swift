@@ -44,6 +44,9 @@ final class WindowModel: ObservableObject {
     @Published var focusPeaking = FocusPeaking.saved {
         didSet { focusPeaking.save() }
     }
+    /// Whether the live camera shows the onion skin (the timeline's Capture
+    /// view) or just the plain camera. The project keeps its onion skin settings.
+    @Published private(set) var showsOnionSkin = true
 
     private var cancellables: Set<AnyCancellable> = []
 
@@ -107,6 +110,13 @@ final class WindowModel: ObservableObject {
         mode = .live
         selection = []
         current = nil
+    }
+
+    /// Switches the live camera between plain and with the onion skin, going
+    /// live to show it.
+    func setShowsOnionSkin(_ on: Bool) {
+        showsOnionSkin = on
+        if mode != .live { goLive() }
     }
 
     func togglePlayback() {

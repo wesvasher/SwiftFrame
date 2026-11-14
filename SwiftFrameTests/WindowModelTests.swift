@@ -191,3 +191,15 @@ import Testing
         #expect(peaking.sensitivity == 1)
     }
 }
+
+@MainActor @Suite struct OnionSkinToggleTests {
+    @Test func switchesToThePlainCameraAndGoesLive() {
+        let model = WindowModel(document: StopMotionDocument())
+        #expect(model.showsOnionSkin)
+        model.mode = .review
+        model.setShowsOnionSkin(false)
+        #expect(!model.showsOnionSkin && model.mode == .live)
+        // The project's onion skin settings are left alone.
+        #expect(model.project.onionSkinFrames == Project().onionSkinFrames)
+    }
+}

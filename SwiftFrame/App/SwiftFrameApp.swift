@@ -95,6 +95,11 @@ struct FrameCommands: Commands {
             Button("Fit Picture") { model?.zoomViewerToFit() }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(model?.canZoomOutViewer != true)
+            Toggle("Show Onion Skin", isOn: Binding(
+                get: { model?.showsOnionSkin ?? true },
+                set: { model?.setShowsOnionSkin($0) }))
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(model == nil)
             Toggle("Focus Peaking", isOn: Binding(
                 get: { model?.focusPeaking.isOn ?? false },
                 set: { model?.focusPeaking.isOn = $0 }))

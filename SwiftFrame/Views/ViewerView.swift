@@ -194,7 +194,7 @@ private struct OnionSkin: View {
     @ObservedObject var model: WindowModel
 
     var body: some View {
-        let count = min(model.project.onionSkinFrames, model.frames.count)
+        let count = model.showsOnionSkin ? min(model.project.onionSkinFrames, model.frames.count) : 0
         let recent = Array(model.frames.suffix(count))
         ZStack {
             ForEach(Array(recent.enumerated()), id: \.element.id) { offset, frame in
