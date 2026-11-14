@@ -200,15 +200,23 @@ struct FrameInspector: View {
         InspectorSection("Playback") {
             GridRow {
                 InspectorLabel("Frame Rate")
-                Picker("Frame Rate", selection: Binding(get: { model.project.framesPerSecond },
-                                                       set: model.setFrameRate)) {
-                    ForEach(Project.frameRates, id: \.self) { Text("\($0) fps").tag($0) }
-                    if !Project.frameRates.contains(model.project.framesPerSecond) {
-                        // A custom rate from the capture bar's switch.
-                        Text("\(model.project.framesPerSecond) fps").tag(model.project.framesPerSecond)
+                HStack(spacing: 4) {
+                    Picker("Frame Rate", selection: Binding(get: { model.project.framesPerSecond },
+                                                           set: model.setFrameRate)) {
+                        ForEach(Project.frameRates, id: \.self) { Text("\($0) fps").tag($0) }
+                        if !Project.frameRates.contains(model.project.framesPerSecond) {
+                            Text("\(model.project.framesPerSecond) fps").tag(model.project.framesPerSecond)
+                        }
                     }
+                    .labelsHidden()
+                    // Any rate from 1 to 60, a frame per second at a time. (No text
+                    // field: Space and Delete are window shortcuts.)
+                    Stepper("Frame Rate", value: Binding(get: { model.project.framesPerSecond },
+                                                         set: model.setFrameRate),
+                            in: 1...60)
+                        .labelsHidden()
+                        .help("Any rate from 1 to 60 frames per second")
                 }
-                .labelsHidden()
             }
             GridRow {
                 InspectorLabel("Loop")

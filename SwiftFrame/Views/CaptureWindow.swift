@@ -68,8 +68,6 @@ struct CaptureWindow: View {
     }
 }
 
-/// The capture button, with the project's length on one side and the
-/// frame rate and timeline zoom on the other.
 /// Picks the camera, beside the capture button.
 private struct CameraSelector: View {
     @ObservedObject var model: WindowModel
@@ -100,6 +98,8 @@ private struct CameraSelector: View {
     }
 }
 
+/// The capture button, with the camera and the project's length on one
+/// side and timeline zoom on the other.
 private struct CaptureBar: View {
     @ObservedObject var model: WindowModel
 
@@ -131,7 +131,6 @@ private struct CaptureBar: View {
                     ProgressView(value: progress).frame(width: 90)
                     Text("Exporting…").font(.callout).foregroundStyle(.secondary)
                 }
-                FrameRateSwitch(model: model)
                 ControlGroup {
                     Button("Zoom Out", systemImage: "minus.magnifyingglass", action: model.zoomOutTimeline)
                         .disabled(!model.canZoomOutTimeline)
@@ -312,104 +311,6 @@ private struct WindowKeyMonitor: NSViewRepresentable {
             monitor = nil
             super.removeFromSuperview()
         }
-    }
-}
-
-/// A small flat switch for the frame rate: 12, 24, or a custom rate set in
-/// a popover. Rounded rectangles, no glass.
-private struct FrameRateSwitch: View {
-    @ObservedObject var model: WindowModel
-    @AppStorage("customFrameRate") private var lastCustom = 15
-    @State private var showsCustom = false
-    @Namespace private var selection
-
-    private enum Choice: Hashable { case twelve, twentyFour, custom }
-
-    static let customRange = 1...60
-
-    private var choice: Choice {
-        switch model.project.framesPerSecond {
-        case 12: .twelve
-        case 24: .twentyFour
-        default: .custom
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 2) {
-            segment(.twelve, Text("12"))
-            segment(.twentyFour, Text("24"))
-            // The symbol's dots sit centered (a typed "…" sits on the baseline), drawn heavier.
-            segment(.custom, choice == .custom
-                    ? Text("\(model.project.framesPerSecond)")
-                    : Text(Image(systemName: "ellipsis")).fontWeight(.black))
-                .popover(isPresented: $showsCustom, arrowEdge: .top) { customEditor }
-        }
-        .padding(2)
-        .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.separator, lineWidth: 0.5))
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: choice)
-        .help("Frames per second: 12, 24, or … for a custom rate")
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Frame rate")
-    }
-
-    private func segment(_ value: Choice, _ title: Text) -> some View {
-        let isSelected = choice == value
-        return Button {
-            choose(value)
-        } label: {
-            title
-                .font(.caption.weight(.semibold).monospacedDigit())
-                .padding(.horizontal, 8)
-                .frame(minWidth: 30, minHeight: 20)
-                .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(Color.accentColor)
-                            .matchedGeometryEffect(id: "selected", in: selection)
-                    }
-                }
-                .contentShape(.rect(cornerRadius: 5))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private func choose(_ value: Choice) {
-        switch value {
-        case .twelve: model.setFrameRate(12)
-        case .twentyFour: model.setFrameRate(24)
-        case .custom:
-            if choice != .custom { model.setFrameRate(lastCustom) }
-            showsCustom = true
-        }
-    }
-
-    private var customEditor: some View {
-        let rate = Binding {
-            model.project.framesPerSecond
-        } set: { value in
-            let clamped = value.clamped(to: Self.customRange)
-            model.setFrameRate(clamped)
-            if clamped != 12, clamped != 24 { lastCustom = clamped }
-        }
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("Custom Frame Rate").font(.headline)
-            // No text field: Space and Delete are window shortcuts here.
-            HStack {
-                Text("\(model.project.framesPerSecond) fps")
-                    .font(.title3.weight(.semibold).monospacedDigit())
-                    .frame(width: 70, alignment: .leading)
-                Stepper("", value: rate, in: Self.customRange).labelsHidden()
-            }
-            Slider(value: Binding(get: { Double(rate.wrappedValue) }, set: { rate.wrappedValue = Int($0.rounded()) }),
-                   in: Double(Self.customRange.lowerBound)...Double(Self.customRange.upperBound), step: 1)
-                .frame(width: 220)
-            Text("Any rate from 1 to 60 frames per second.").font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(14)
     }
 }
 
