@@ -614,18 +614,13 @@ private struct FrameCell: View {
             FramePicture(image: model.images.thumbnail(frame.image, data: model.document.images[frame.image]))
                 .frame(width: FrameCell.standardWidth, height: FrameCell.thumbnailHeight)
         }
-        .dropDestination(for: FrameDrop.self) { items, _ in
-            handleDrop(items, before: frame.id)
-        } isTargeted: { isTargeted = $0 }
+        .onDrop(of: FrameDropDelegate.types,
+                delegate: FrameDropDelegate(model: model, target: frame.id, isTargeted: $isTargeted))
         .contextMenu {
             FrameMenuItems(model: model, clicked: frame.id)
         }
         .help("Frame \(number)" + (frame.hold > 1 ? ", held for \(frame.hold) frames" : "")
               + ". Drag to move it; right-click for more.")
-    }
-
-    private func handleDrop(_ items: [FrameDrop], before target: UUID?) -> Bool {
-        model.handleDrop(items, before: target)
     }
 }
 
@@ -660,9 +655,8 @@ private struct EndSpace: View {
                 if isTargeted { Capsule().fill(Color.accentColor).frame(width: 3).offset(x: -2) }
             }
             .contentShape(.rect)
-            .dropDestination(for: FrameDrop.self) { items, _ in
-                model.handleDrop(items, before: nil)
-            } isTargeted: { isTargeted = $0 }
+            .onDrop(of: FrameDropDelegate.types,
+                    delegate: FrameDropDelegate(model: model, target: nil, isTargeted: $isTargeted))
     }
 }
 
@@ -698,9 +692,8 @@ private struct CaptureTile: View {
         .onTapGesture {
             if isLive { model.capture() } else { model.goLive() }
         }
-        .dropDestination(for: FrameDrop.self) { items, _ in
-            model.handleDrop(items, before: nil)
-        } isTargeted: { isTargeted = $0 }
+        .onDrop(of: FrameDropDelegate.types,
+                delegate: FrameDropDelegate(model: model, target: nil, isTargeted: $isTargeted))
         .help(isLive ? "Capture a frame (tap ⌘)" : "Back to the live camera to capture (⌘L)")
         .accessibilityLabel("Capture")
         .accessibilityAddTraits(.isButton)
@@ -744,7 +737,7 @@ extension UTType {
 }
 
 /// A frame dragged within one window's filmstrip.
-struct FrameDrag: Codable, Transferable {
+struct FrameDrag: Codable, Transferable, Sendable {
     let id: UUID
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .swiftFrameFrame)
@@ -752,21 +745,66 @@ struct FrameDrag: Codable, Transferable {
 }
 
 /// What the filmstrip accepts: its own frames, or picture files from Finder.
-enum FrameDrop: Transferable {
+enum FrameDrop: Sendable {
     case frame(UUID)
     case file(URL)
+}
 
-    static var transferRepresentation: some TransferRepresentation {
-        ProxyRepresentation { (drag: FrameDrag) in FrameDrop.frame(drag.id) }
-        ProxyRepresentation { (url: URL) in FrameDrop.file(url) }
+/// Drops on a frame (before it), the end space or the Capture tile (at the
+/// end). Holding Option copies frames instead of moving them, as in Finder:
+/// it's read the moment the mouse is let go, before the dropped items load,
+/// and the pointer shows a copy (+) while it's held.
+struct FrameDropDelegate: DropDelegate {
+    static let types: [UTType] = [.swiftFrameFrame, .fileURL]
+
+    let model: WindowModel
+    let target: UUID?
+    @Binding var isTargeted: Bool
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: Self.types) }
+    func dropEntered(info: DropInfo) { isTargeted = true }
+    func dropExited(info: DropInfo) { isTargeted = false }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let movesFrames = info.hasItemsConforming(to: [.swiftFrameFrame]) && !NSEvent.modifierFlags.contains(.option)
+        return DropProposal(operation: movesFrames ? .move : .copy)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        isTargeted = false
+        let copies = NSEvent.modifierFlags.contains(.option)
+        let providers = info.itemProviders(for: Self.types)
+        let model = model, target = target
+        Task { @MainActor in
+            var items: [FrameDrop] = []
+            for provider in providers {
+                if let item = await Self.load(provider) { items.append(item) }
+            }
+            model.handleDrop(items, before: target, copies: copies)
+        }
+        return true
+    }
+
+    private static func load(_ provider: NSItemProvider) async -> FrameDrop? {
+        if provider.hasItemConformingToTypeIdentifier(UTType.swiftFrameFrame.identifier) {
+            return await withCheckedContinuation { continuation in
+                _ = provider.loadTransferable(type: FrameDrag.self) { result in
+                    continuation.resume(returning: (try? result.get()).map { FrameDrop.frame($0.id) })
+                }
+            }
+        }
+        return await withCheckedContinuation { continuation in
+            _ = provider.loadTransferable(type: URL.self) { result in
+                continuation.resume(returning: (try? result.get()).map { FrameDrop.file($0) })
+            }
+        }
     }
 }
 
 extension WindowModel {
-    func handleDrop(_ items: [FrameDrop], before target: UUID?) -> Bool {
+    /// `copies`: Option was held when the frames were dropped.
+    func handleDrop(_ items: [FrameDrop], before target: UUID?, copies: Bool) {
         var files: [URL] = []
-        // Holding Option when letting go copies instead of moving, as in Finder.
-        let copies = NSEvent.modifierFlags.contains(.option)
         for item in items {
             switch item {
             case .frame(let id):
@@ -777,6 +815,5 @@ extension WindowModel {
             }
         }
         if !files.isEmpty { addImages(files, before: target) }
-        return true
     }
 }
