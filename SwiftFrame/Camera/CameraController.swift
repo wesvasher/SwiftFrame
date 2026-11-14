@@ -19,6 +19,8 @@ final class CameraController: NSObject, ObservableObject {
     @Published private(set) var devices: [CameraDevice] = []
     @Published private(set) var status: Status = .starting
     @Published private(set) var deviceID: String?
+    /// The camera picture's size in pixels, once a picture has arrived.
+    @Published private(set) var videoSize: CGSize?
 
     nonisolated let session = AVCaptureSession()
     private nonisolated let output = AVCaptureVideoDataOutput()
@@ -135,12 +137,21 @@ final class CameraController: NSObject, ObservableObject {
         peakingFeed.image = image
     }
 
-    /// The newest camera picture, mirrored if asked.
-    func captureStill(mirrored: Bool) -> CGImage? {
+    /// The newest camera picture, mirrored if asked, and cropped from the
+    /// middle if asked.
+    func captureStill(mirrored: Bool, crop: FrameCrop? = nil) -> CGImage? {
         guard let buffer = latest.buffer else { return nil }
         var image = CIImage(cvPixelBuffer: buffer)
         if mirrored { image = image.oriented(.upMirrored) }
-        return ciContext.createCGImage(image, from: image.extent)
+        var rect = image.extent
+        if let crop {
+            rect = crop.ciRect(sourceWidth: Int(rect.width), sourceHeight: Int(rect.height))
+        }
+        return ciContext.createCGImage(image, from: rect)
+    }
+
+    fileprivate func receiveVideoSize(_ size: CGSize) {
+        if videoSize != size { videoSize = size }
     }
 }
 
@@ -149,6 +160,10 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
                                    from connection: AVCaptureConnection) {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         latest.buffer = buffer
+        let size = CGSize(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+        if latest.sizeChanged(to: size) {
+            Task { @MainActor [weak self] in self?.receiveVideoSize(size) }
+        }
         guard let (peaking, generation) = peakingRequest.due(at: CACurrentMediaTime()) else { return }
         let image = UncheckedImage(peaking.overlay(for: buffer, context: ciContext))
         Task { @MainActor [weak self] in
@@ -161,9 +176,18 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
 private final class LatestFrame: @unchecked Sendable {
     private let lock = NSLock()
     private var _buffer: CVPixelBuffer?
+    private var size: CGSize?
     var buffer: CVPixelBuffer? {
         get { lock.withLock { _buffer } }
         set { lock.withLock { _buffer = newValue } }
+    }
+
+    /// Whether pictures have changed size since last asked.
+    func sizeChanged(to new: CGSize) -> Bool {
+        lock.withLock {
+            defer { size = new }
+            return size != new
+        }
     }
 }
 

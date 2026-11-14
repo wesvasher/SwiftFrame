@@ -138,12 +138,25 @@ private struct LiveView: View {
         self.camera = model.camera
     }
 
+    /// The part of the camera's picture captures keep, if it's cropped.
+    private var cropRect: CGRect? {
+        guard let crop = model.project.crop, let size = camera.videoSize else { return nil }
+        return crop.unitRect(sourceWidth: Int(size.width), sourceHeight: Int(size.height))
+    }
+
+    private var peakingRequest: FocusPeaking {
+        var peaking = model.focusPeaking
+        peaking.crop = model.project.crop
+        return peaking
+    }
+
     var body: some View {
         ZStack {
             switch camera.status {
             case .running, .starting:
                 CameraPreview(session: camera.session, mirrored: model.project.mirrorCamera,
-                              zoom: model.viewerZoom, pan: model.viewerPan)
+                              zoom: model.viewerZoom, pan: model.viewerPan,
+                              videoSize: camera.videoSize, crop: cropRect)
                 Group {
                     OnionSkin(model: model)
                     if model.focusPeaking.isOn {
@@ -174,7 +187,7 @@ private struct LiveView: View {
             }
         }
         // Only work out focus peaking while it's showing.
-        .onChange(of: model.focusPeaking, initial: true) { camera.setFocusPeaking(model.focusPeaking) }
+        .onChange(of: peakingRequest, initial: true) { camera.setFocusPeaking(peakingRequest) }
         .onDisappear { camera.setFocusPeaking(nil) }
     }
 }

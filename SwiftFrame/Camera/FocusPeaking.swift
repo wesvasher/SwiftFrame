@@ -44,6 +44,8 @@ struct FocusPeaking: Equatable, Sendable {
     }
 
     var isOn = false
+    /// The project's crop, so the outlines match the cropped picture. Not saved.
+    var crop: FrameCrop?
     var tint: Tint = .red
     var sensitivity = Preset.medium.rawValue {
         didSet { sensitivity = min(max(sensitivity, Self.sensitivityRange.lowerBound), Self.sensitivityRange.upperBound) }
@@ -79,8 +81,12 @@ struct FocusPeaking: Equatable, Sendable {
     /// The edges of a camera picture as a transparent image the same shape,
     /// tinted where they're sharp. It's worked out at most `maxWidth` wide.
     func overlay(for buffer: CVPixelBuffer, context: CIContext, maxWidth: CGFloat = 960) -> CGImage? {
-        let source = CIImage(cvPixelBuffer: buffer)
+        var source = CIImage(cvPixelBuffer: buffer)
         guard source.extent.width > 0 else { return nil }
+        if let crop {
+            source = source.cropped(to: crop.ciRect(sourceWidth: Int(source.extent.width),
+                                                    sourceHeight: Int(source.extent.height)))
+        }
         let scale = min(1, maxWidth / source.extent.width)
         let small = source.applyingFilter("CILanczosScaleTransform", parameters: ["inputScale": scale, "inputAspectRatio": 1])
         let extent = small.extent.integral

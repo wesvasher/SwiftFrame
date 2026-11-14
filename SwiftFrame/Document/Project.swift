@@ -29,6 +29,8 @@ struct Project: Codable, Equatable, Sendable {
     var loopPlayback = true
     /// The camera last used, by `AVCaptureDevice.uniqueID`.
     var cameraID: String?
+    /// What new captures are cropped to; nil keeps the camera's whole picture.
+    var crop: FrameCrop?
 
     static let frameRates = [6, 8, 10, 12, 15, 24, 25, 30]
 

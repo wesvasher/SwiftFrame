@@ -86,7 +86,7 @@ final class WindowModel: ObservableObject {
 
     /// Adds the camera's current picture as a new frame at the end.
     func capture() {
-        guard canCapture, let image = camera.captureStill(mirrored: project.mirrorCamera),
+        guard canCapture, let image = camera.captureStill(mirrored: project.mirrorCamera, crop: project.crop),
               let data = ImageCoding.jpeg(image)
         else {
             NSSound.beep()
@@ -407,6 +407,7 @@ final class WindowModel: ObservableObject {
     func setOnionSkinFrames(_ n: Int) { edit("Change Onion Skin") { $0.onionSkinFrames = n } }
     func setOnionSkinOpacity(_ o: Double) { edit("Change Onion Skin") { $0.onionSkinOpacity = o } }
     func setMirror(_ on: Bool) { edit("Mirror Camera") { $0.mirrorCamera = on } }
+    func setCrop(_ crop: FrameCrop?) { edit("Change Crop") { $0.crop = crop } }
     func setLoop(_ on: Bool) { edit("Loop Playback") { $0.loopPlayback = on } }
 
     // MARK: - Import

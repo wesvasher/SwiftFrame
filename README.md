@@ -16,6 +16,7 @@ Each SwiftFrame window is a capture window for one project. It shows the live ca
 - **Playhead**: a line across the filmstrip at the frame showing, gliding along while it plays and, with Habanero Mode on in Settings, a trail of fire streaming off the back. Drag it, or click or drag in the strip above the frames, to scrub; past the last frame is the live camera.
 - **Back to capturing**: click the Capture tile at the right of the timeline, press → past the last frame, or press ⌘L.
 - **Import pictures**: drop image files onto the filmstrip, or use Frame → Add Pictures.
+- **Crop**: crop new frames to a shape from the middle of the camera's picture without squeezing it, such as a6600 1620×1080 (3:2, the shape of its photos, from a 1920×1080 HDMI signal), 4:3, square, vertical or scope.
 - **Camera shutter**: capture from a Sony camera over HDMI and fire its shutter over Bluetooth with each frame, so the camera also saves a full-size photo (a6600 and other cameras that work with Sony's RMT-P1BT remote).
 - **Export**: a movie in H.264, HEVC, or ProRes (422 Proxy, LT, 422, HQ, or 4444) as .mov or .mp4, an animated GIF, or an image sequence (PNG, JPEG, or TIFF), at full size or scaled to 4K, 1080p, 720p, 480p, or 360p.
 - **Settings**: choose Auto, Light or Dark appearance, whether the viewer flashes when you capture, and Habanero Mode (fire off the playhead).

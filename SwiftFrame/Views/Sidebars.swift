@@ -33,6 +33,7 @@ struct CaptureSidebar: View {
                     .buttonStyle(.plain)
                 }
                 Toggle("Mirror", isOn: Binding(get: { model.project.mirrorCamera }, set: model.setMirror))
+                CropPicker(model: model, camera: camera)
             }
 
             CameraShutterSection(remote: .shared)
@@ -302,5 +303,37 @@ private struct CameraShutterSection: View {
     private var forgetButton: some View {
         Button("Forget Camera") { remote.forget() }
             .help("Unpair this camera, to pair another")
+    }
+}
+
+/// Crops new captures to a shape from the middle of the camera's picture.
+private struct CropPicker: View {
+    @ObservedObject var model: WindowModel
+    @ObservedObject var camera: CameraController
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Picker("Crop", selection: Binding(get: { model.project.crop }, set: model.setCrop)) {
+                Text("Full Frame").tag(FrameCrop?.none)
+                Divider()
+                ForEach(FrameCrop.presets) { Text($0.name).tag(Optional($0.crop)) }
+                if let crop = model.project.crop, !FrameCrop.presets.contains(where: { $0.crop == crop }) {
+                    Text(crop.name).tag(Optional(crop))
+                }
+            }
+            .help("Crop new frames to this shape from the middle of the picture, without squeezing it")
+            if let detail {
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// What the crop keeps of the camera's actual picture.
+    private var detail: String? {
+        guard let size = camera.videoSize else { return nil }
+        let width = Int(size.width), height = Int(size.height)
+        guard let crop = model.project.crop else { return "\(width) × \(height)" }
+        let rect = crop.rect(sourceWidth: width, sourceHeight: height)
+        return "\(Int(rect.width)) × \(Int(rect.height)) of \(width) × \(height)"
     }
 }
