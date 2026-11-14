@@ -34,7 +34,7 @@ struct FilmstripView: View {
 
     private var strip: some View {
         ScrollView(.horizontal) {
-            FilmstripContent(model: model)
+            FilmstripContent(model: model, visible: scrollX...(scrollX + max(visibleWidth, 1)))
         }
         .scrollIndicators(.visible)
         .scrollPosition($scrollPosition)
@@ -60,11 +60,11 @@ struct FilmstripView: View {
             if new > old, model.mode == .live { withAnimation { scrollPosition.scrollTo(edge: .trailing) } }
         }
         .onChange(of: model.mode == .playback ? model.playingFrame : model.current) { _, id in
-            if let id, !isInView(id) { scrollPosition.scrollTo(id: id, anchor: .center) }
+            if let id, !isInView(id) { center(id) }
         }
         .onChange(of: model.thumbnailWidth) {
             // Keep the frame being looked at in view after zooming.
-            if let id = model.current { scrollPosition.scrollTo(id: id, anchor: .center) }
+            if let id = model.current { center(id) }
             else { scrollPosition.scrollTo(edge: .trailing) }
         }
         .frame(height: FrameCell.height + FilmstripLayout.headerHeight + 8)
@@ -76,6 +76,18 @@ struct FilmstripView: View {
     /// Whether the frames run past the visible width (so the strip scrolls).
     private var isZoomedIn: Bool {
         !model.frames.isEmpty && visibleWidth > 0 && contentWidth > visibleWidth + 1
+    }
+
+    /// Scrolls so the frame is in the middle of the part not under the
+    /// Capture tile. (Only frames in view exist, so this can't scroll by id.)
+    private func center(_ id: UUID) {
+        guard let index = model.frames.firstIndex(of: id) else { return }
+        let width = model.thumbnailWidth
+        let total = FilmstripLayout.contentWidth(count: model.frames.count, thumbnailWidth: width)
+        let middle = FilmstripLayout.cellX(index, thumbnailWidth: width) + FilmstripLayout.stride(width) / 2
+        let left = min(max(0, middle - unobscuredWidth / 2), max(0, total - visibleWidth))
+        scrollX = left
+        scrollPosition.scrollTo(x: left)
     }
 
     private func isInView(_ id: UUID) -> Bool {
@@ -150,24 +162,37 @@ private struct NavigatorOverview: View {
 
 /// The frames, then room for the pinned Capture tile, with the scrub strip
 /// and playhead over them.
+///
+/// Every frame sits exactly where `FilmstripLayout` says, like the playhead
+/// and the in-to-out bar, and only the frames in view (and a few either side)
+/// are made. (A LazyHStack guesses where frames it hasn't drawn yet go, so
+/// after zooming or inserting, its frames drifted from the playhead.)
 struct FilmstripContent: View {
     @ObservedObject var model: WindowModel
+    /// The part of the strip on screen, in its own points.
+    let visible: ClosedRange<CGFloat>
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        LazyHStack(spacing: FilmstripLayout.spacing(model.thumbnailWidth)) {
-            ForEach(Array(model.frames.enumerated()), id: \.element.id) { index, frame in
-                FrameCell(model: model, frame: frame, number: index + 1)
-                    .id(frame.id)
+        let width = model.thumbnailWidth
+        let frames = model.frames
+        let shown = shownIndices(count: frames.count, thumbnailWidth: width)
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(width: FilmstripLayout.contentWidth(count: frames.count, thumbnailWidth: width),
+                       height: FrameCell.height)
+            ForEach(shown.map { (index: $0, frame: frames[$0]) }, id: \.frame.id) { item in
+                FrameCell(model: model, frame: item.frame, number: item.index + 1)
+                    .offset(x: FilmstripLayout.cellX(item.index, thumbnailWidth: width))
                     // Copies slide out from their originals; frames going to or
                     // coming back from the recycle bin shrink and fade.
-                    .transition(model.newCopies.contains(frame.id) ? copyTransition : binTransition)
+                    .transition(model.newCopies.contains(item.frame.id) ? copyTransition : binTransition)
             }
             // Room for the pinned Capture tile, so the last frame can scroll
             // out from under it. Dropping here moves to the end.
             EndSpace(model: model)
+                .offset(x: FilmstripLayout.cellX(frames.count, thumbnailWidth: width))
         }
-        .padding(.leading, FilmstripLayout.inset)
         .padding(.top, FilmstripLayout.headerHeight)
         .padding(.bottom, 8)
         .overlay(alignment: .topLeading) {
@@ -190,6 +215,18 @@ struct FilmstripContent: View {
     /// A new copy starts on top of its original, a little smaller, and slides
     /// out into its place as the frames after it move over. Just a fade with
     /// Reduce Motion on.
+    /// The frames in view, with a few cells' margin either side so frames
+    /// sliding in from just off screen are already there.
+    private func shownIndices(count: Int, thumbnailWidth width: CGFloat) -> Range<Int> {
+        guard count > 0 else { return 0..<0 }
+        let stride = FilmstripLayout.stride(width)
+        let margin = max(8, Int((200 / stride).rounded(.up)))
+        let first = Int(((visible.lowerBound - FilmstripLayout.inset) / stride).rounded(.down)) - margin
+        let last = Int(((visible.upperBound - FilmstripLayout.inset) / stride).rounded(.up)) + margin
+        let lower = min(max(0, first), count)
+        return lower..<min(max(lower, last), count)
+    }
+
     private var binTransition: AnyTransition {
         reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity)
     }
@@ -267,6 +304,11 @@ enum FilmstripLayout {
         // …and shrinking with the width below it (stride 1.25 × width), down
         // to half a point wide.
         return max(0.5, min(perFrame / 1.25, compactWidth - 0.01))
+    }
+
+    /// The whole strip's width: the frames, then the space under the Capture tile.
+    static func contentWidth(count: Int, thumbnailWidth: CGFloat) -> CGFloat {
+        cellX(count, thumbnailWidth: thumbnailWidth) + endSpaceWidth
     }
 
     /// The left edge of the cell at `index` (`frames.count` is the space under the Capture tile).
