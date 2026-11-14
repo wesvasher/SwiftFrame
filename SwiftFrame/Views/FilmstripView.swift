@@ -111,9 +111,9 @@ struct FilmstripView: View {
         } else if model.mode == .review, let id = model.current {
             index = model.frames.firstIndex(of: id)
         } else {
-            return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width)
+            return FilmstripLayout.playheadX(model.frames.count, thumbnailWidth: width)
         }
-        return index.map { FilmstripLayout.cellX($0, thumbnailWidth: width) + FilmstripLayout.stride(width) / 2 }
+        return index.map { FilmstripLayout.playheadX($0, thumbnailWidth: width) }
     }
 }
 
@@ -268,6 +268,12 @@ enum FilmstripLayout {
     /// `n` is after frame `n - 1`.
     static func boundary(at x: CGFloat, thumbnailWidth: CGFloat) -> Int {
         max(0, Int(((x - inset) / stride(thumbnailWidth)).rounded()))
+    }
+
+    /// Where the playhead sits for the frame at `index`: in the gap just
+    /// before it (`frames.count` is the gap after the last frame).
+    static func playheadX(_ index: Int, thumbnailWidth: CGFloat) -> CGFloat {
+        cellX(index, thumbnailWidth: thumbnailWidth) - spacing(thumbnailWidth) / 2
     }
 
     /// The cell under `x`; `frames.count` or more is past the last frame.
@@ -461,25 +467,24 @@ private struct Playhead: View {
         .help("Drag to move the playhead")
     }
 
-    /// The middle of the frame at `index`.
-    private func center(_ index: Int) -> CGFloat {
-        let width = model.thumbnailWidth
-        return FilmstripLayout.cellX(index, thumbnailWidth: width) + FilmstripLayout.cellPadding(width) + width / 2
+    /// The start of the frame at `index`: the gap just before it, so the
+    /// line stays clear of the frame's picture and grab handle.
+    private func start(_ index: Int) -> CGFloat {
+        FilmstripLayout.playheadX(index, thumbnailWidth: model.thumbnailWidth)
     }
 
     private func x(at date: Date) -> CGFloat {
         let width = model.thumbnailWidth
         if model.mode == .playback, let position = model.playbackPosition(at: date) {
-            // Glides evenly from this frame's middle to the next one's over
+            // Glides evenly from this frame's start to the next one's over
             // the frame's time on screen (1/12 s at 12 fps, longer when held).
-            return center(position.index) + FilmstripLayout.stride(width) * position.fraction
+            return start(position.index) + FilmstripLayout.stride(width) * position.fraction
         }
         if model.mode == .review, let id = model.current, let index = model.frames.firstIndex(of: id) {
-            return center(index)
+            return start(index)
         }
         // Live: in the gap after the last frame, where the next capture goes.
-        return FilmstripLayout.cellX(model.frames.count, thumbnailWidth: width)
-            - FilmstripLayout.spacing(width) / 2
+        return start(model.frames.count)
     }
 
     private var drag: some Gesture {
@@ -487,7 +492,9 @@ private struct Playhead: View {
             .onChanged { value in
                 let start = dragStart ?? x(at: Date())
                 dragStart = start
-                model.scrub(toIndex: FilmstripLayout.index(at: start + value.translation.width,
+                // The line sits at a frame's start, so it shows the frame to
+                // its right (a point in, past rounding).
+                model.scrub(toIndex: FilmstripLayout.index(at: start + value.translation.width + 1,
                                                            thumbnailWidth: model.thumbnailWidth))
             }
             .onEnded { _ in dragStart = nil }
