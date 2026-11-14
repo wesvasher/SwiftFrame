@@ -57,6 +57,7 @@ struct CaptureWindow: View {
         .onChange(of: fileURL) { model.movieName = movieName }
         .onChange(of: undoManager) { model.undoManager = undoManager }
         .onDisappear { model.camera.stop() }
+        .sheet(isPresented: $model.showsExportSheet) { ExportSheet(model: model) }
         .alert("Something went wrong", isPresented: Binding(
             get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
         ) {
@@ -222,10 +223,10 @@ private struct WindowToolbar: ToolbarContent {
             Button {
                 model.exportMovie()
             } label: {
-                Label("Export Movie", systemImage: "square.and.arrow.up")
+                Label("Export", systemImage: "square.and.arrow.up")
             }
             .disabled(model.frames.isEmpty || model.exportProgress != nil)
-            .help("Export a QuickTime movie")
+            .help("Export a movie, GIF or image sequence (⌘E)")
         }
     }
 

@@ -1,18 +1,41 @@
 import AVFoundation
 import CoreGraphics
 
-/// Writes the frames to a QuickTime movie, each shown for its hold.
+/// Writes the frames to a movie, each shown for its hold, or hands off to
+/// `ImageExporter` for a GIF or a folder of pictures.
 enum MovieExporter {
-    enum Codec: String, CaseIterable, Identifiable, Sendable {
+    enum Codec: String, Codable, CaseIterable, Identifiable, Sendable {
         case h264 = "H.264"
         case hevc = "HEVC"
-        case proRes = "ProRes 422"
+        case proRes422Proxy = "ProRes 422 Proxy"
+        case proRes422LT = "ProRes 422 LT"
+        case proRes422 = "ProRes 422"
+        case proRes422HQ = "ProRes 422 HQ"
+        case proRes4444 = "ProRes 4444"
         var id: String { rawValue }
         var type: AVVideoCodecType {
             switch self {
             case .h264: .h264
             case .hevc: .hevc
-            case .proRes: .proRes422
+            case .proRes422Proxy: .proRes422Proxy
+            case .proRes422LT: .proRes422LT
+            case .proRes422: .proRes422
+            case .proRes422HQ: .proRes422HQ
+            case .proRes4444: .proRes4444
+            }
+        }
+        var isProRes: Bool { self != .h264 && self != .hevc }
+
+        /// A line about what it's for, under the picker.
+        var note: String {
+            switch self {
+            case .h264: "Plays everywhere. Small files."
+            case .hevc: "Smaller than H.264 at the same quality. Newer devices."
+            case .proRes422Proxy: "Lightweight ProRes for offline editing."
+            case .proRes422LT: "Lighter ProRes for editing."
+            case .proRes422: "High quality for editing and finishing."
+            case .proRes422HQ: "Higher quality ProRes for finishing and grading."
+            case .proRes4444: "The highest quality ProRes, with full color detail."
             }
         }
     }
@@ -37,13 +60,32 @@ enum MovieExporter {
     // AVAssetWriter.inputPixelBufferReceiver(for:pixelBufferAttributes:).
     static func export(_ items: [Item], framesPerSecond fps: Int, codec: Codec, to url: URL,
                        progress: @Sendable @escaping (Double) -> Void) async throws {
+        var settings = ExportSettings()
+        settings.codec = codec
+        try await export(items, framesPerSecond: fps, settings: settings, to: url, progress: progress)
+    }
+
+    /// Exports as `settings` says: a movie, a GIF or a folder of pictures.
+    static func export(_ items: [Item], framesPerSecond fps: Int, settings: ExportSettings, to url: URL,
+                       progress: @Sendable @escaping (Double) -> Void) async throws {
+        switch settings.kind {
+        case .movie: try await exportMovie(items, framesPerSecond: fps, settings: settings, to: url, progress: progress)
+        case .gif: try await ImageExporter.exportGIF(items, framesPerSecond: fps, settings: settings, to: url,
+                                                     progress: progress)
+        case .images: try await ImageExporter.exportImages(items, settings: settings, to: url, progress: progress)
+        }
+    }
+
+    private static func exportMovie(_ items: [Item], framesPerSecond fps: Int, settings: ExportSettings,
+                                    to url: URL, progress: @Sendable @escaping (Double) -> Void) async throws {
+        let codec = settings.codec
         guard let first = items.first else { throw ExportError.noFrames }
         guard let firstImage = ImageCoding.decode(first.data) else { throw ExportError.unreadableFrame }
-        // Encoders want even sizes.
-        let width = firstImage.width & ~1, height = firstImage.height & ~1
+        let (width, height) = settings.outputSize(width: firstImage.width, height: firstImage.height)
 
         try? FileManager.default.removeItem(at: url)
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let writer = try AVAssetWriter(outputURL: url,
+                                       fileType: settings.effectiveContainer == .mp4 ? .mp4 : .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: codec.type,
             AVVideoWidthKey: width,
@@ -98,13 +140,18 @@ enum MovieExporter {
             bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
         else { return nil }
+        drawFitted(image, in: context, width: width, height: height)
+        return buffer
+    }
+
+    /// Draws a picture fitted inside the export's size on black, so pictures
+    /// of other sizes fit inside the first one's.
+    static func drawFitted(_ image: CGImage, in context: CGContext, width: Int, height: Int) {
         context.setFillColor(.black)
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        // Fit pictures of other sizes inside the first one's.
         let scale = min(Double(width) / Double(image.width), Double(height) / Double(image.height))
         let w = Double(image.width) * scale, h = Double(image.height) * scale
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(x: (Double(width) - w) / 2, y: (Double(height) - h) / 2, width: w, height: h))
-        return buffer
     }
 }

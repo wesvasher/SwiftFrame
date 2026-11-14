@@ -437,30 +437,50 @@ final class WindowModel: ObservableObject {
 
     // MARK: - Export
 
-    var codec: MovieExporter.Codec = .h264
+    /// How the last export was set up; the Export sheet starts from it.
+    @Published var exportSettings = ExportSettings.saved {
+        didSet { exportSettings.save() }
+    }
+    @Published var showsExportSheet = false
     /// The suggested movie name, from the project's file name.
     var movieName = "Animation.mov"
 
+    /// Opens the Export sheet.
     func exportMovie() {
         guard !frames.isEmpty, exportProgress == nil else { return }
+        showsExportSheet = true
+    }
+
+    /// Asks where to save, then exports as `exportSettings` says.
+    func export() {
+        showsExportSheet = false
+        guard !frames.isEmpty, exportProgress == nil else { return }
+        let settings = exportSettings
+        // After the sheet has gone.
+        DispatchQueue.main.async { self.runExport(settings) }
+    }
+
+    private func runExport(_ settings: ExportSettings) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.quickTimeMovie]
-        panel.nameFieldStringValue = movieName
-        panel.message = "Export the animation as a QuickTime movie."
-        let accessory = NSHostingView(rootView: CodecPicker(model: self))
-        accessory.frame.size = accessory.fittingSize
-        panel.accessoryView = accessory
+        panel.allowedContentTypes = [settings.contentType]
+        panel.nameFieldStringValue = settings.fileName(for: (movieName as NSString).deletingPathExtension)
+        panel.message = switch settings.kind {
+        case .movie: "Export the animation as a \(settings.codec.rawValue) movie."
+        case .gif: "Export the animation as an animated GIF."
+        case .images: "Export the animation as a new folder of \(settings.imageFormat.name) pictures."
+        }
+        panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         let items = frames.compactMap { frame in
             document.images[frame.image].map { MovieExporter.Item(data: $0, hold: frame.hold) }
         }
-        let fps = project.framesPerSecond, codec = codec
+        let fps = project.framesPerSecond
         exportProgress = 0
         Task {
             do {
                 try await Task.detached(priority: .userInitiated) {
-                    try await MovieExporter.export(items, framesPerSecond: fps, codec: codec, to: url) { value in
+                    try await MovieExporter.export(items, framesPerSecond: fps, settings: settings, to: url) { value in
                         Task { @MainActor in self.exportProgress = value }
                     }
                 }.value
@@ -471,20 +491,5 @@ final class WindowModel: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
-    }
-}
-
-private struct CodecPicker: View {
-    @ObservedObject var model: WindowModel
-    @State private var codec: MovieExporter.Codec = .h264
-
-    var body: some View {
-        Picker("Format:", selection: $codec) {
-            ForEach(MovieExporter.Codec.allCases) { Text($0.rawValue).tag($0) }
-        }
-        .fixedSize()
-        .padding(12)
-        .onAppear { codec = model.codec }
-        .onChange(of: codec) { model.codec = codec }
     }
 }

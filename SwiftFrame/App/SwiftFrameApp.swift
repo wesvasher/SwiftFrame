@@ -125,7 +125,7 @@ struct FrameCommands: Commands {
             Divider()
         }
         CommandGroup(after: .importExport) {
-            Button("Export Movie…") { model?.exportMovie() }
+            Button("Export…") { model?.exportMovie() }
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(model?.frames.isEmpty ?? true)
         }
