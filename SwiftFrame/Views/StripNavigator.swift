@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A small overview of a zoomed-in strip (from SwiftCut, where it navigates the timeline) with
+/// A small overview of a zoomed-in strip (from SwiftCut, where it navigates the timeline; here without its Zoom to Fit button) with
 /// the part in view outlined, like the video's zoom navigator. Drag the box to scroll; click
 /// anywhere else in it to jump there.
 struct StripNavigator<Overview: View>: View {
@@ -14,8 +14,6 @@ struct StripNavigator<Overview: View>: View {
     var marked: ClosedRange<CGFloat>?
     /// Scrolls the strip so its left edge is at this place.
     let scroll: (CGFloat) -> Void
-    /// Zooms back out to fit (which also hides the navigator).
-    let close: () -> Void
     /// The whole strip in miniature, drawn at the width it's given.
     @ViewBuilder let overview: (_ width: CGFloat) -> Overview
 
@@ -25,19 +23,12 @@ struct StripNavigator<Overview: View>: View {
     static var height: CGFloat { 20 }
 
     var body: some View {
-        HStack(spacing: 6) {
-            // Takes the space it's offered, whatever it draws.
-            GeometryReader { geometry in
-                map(width: geometry.size.width)
-            }
-            .frame(height: Self.height)
-
-            Button("Zoom to Fit", systemImage: "arrow.right.and.line.vertical.and.arrow.left", action: close)
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Zoom out to fit")
+        // Takes the space it's offered, whatever it draws. (SwiftFrame has no
+        // Zoom to Fit button here: the capture bar's zoom buttons have one.)
+        GeometryReader { geometry in
+            map(width: geometry.size.width)
         }
+        .frame(height: Self.height)
     }
 
     private func map(width: CGFloat) -> some View {

@@ -90,8 +90,7 @@ struct FilmstripView: View {
             scroll: { left in
                 scrollX = left
                 scrollPosition.scrollTo(x: left)
-            },
-            close: { model.zoomTimelineToFit() }
+            }
         ) { mapWidth in
             let scale = mapWidth / max(1, contentWidth)
             NavigatorOverview(model: model, scale: scale, thumbnailWidth: width)
