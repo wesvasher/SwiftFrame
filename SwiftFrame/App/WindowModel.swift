@@ -128,22 +128,78 @@ final class WindowModel: ObservableObject {
     func togglePlayback() {
         if mode == .playback {
             stopPlayback()
-        } else if !frames.isEmpty {
+        } else if let range = playRange {
             // Resume from the frame being looked at (where playback was
-            // paused), or start over from live or the last frame.
-            var startIndex = 0
-            if mode == .review, let id = current, let index = frames.firstIndex(of: id), index < frames.count - 1 {
+            // paused) if it's between the marks, or start over from the in
+            // mark (from live, the last frame, or outside the marks).
+            var startIndex = range.lowerBound
+            if mode == .review, let id = current, let index = frames.firstIndex(of: id),
+               range.contains(index), index < range.upperBound {
                 startIndex = index
             }
             startPlayback(fromIndex: startIndex)
         }
     }
 
-    /// Fills the screen with the animation and plays it from the start.
+    /// Fills the screen with the animation and plays it from the start (the
+    /// in mark, if there is one).
     func playFullScreen() {
-        guard !frames.isEmpty else { return }
+        guard let range = playRange else { return }
         isPlayingFullScreen = true
-        startPlayback(fromIndex: 0)
+        startPlayback(fromIndex: range.lowerBound)
+    }
+
+    // MARK: - In and out marks
+
+    /// The first and last frames to play, by id; nil is the first or last
+    /// frame of the animation, so new captures at the end are included.
+    /// Not saved with the project.
+    @Published private(set) var markIn: UUID?
+    @Published private(set) var markOut: UUID?
+
+    /// The frames playback covers, by index.
+    var playRange: ClosedRange<Int>? { frames.playRange(in: markIn, out: markOut) }
+
+    /// Whether the marks narrow playback to part of the animation.
+    var hasMarks: Bool {
+        guard let range = playRange else { return false }
+        return range != 0...(frames.count - 1)
+    }
+
+    /// The frame the in and out commands mark: the one showing.
+    private var markableIndex: Int? {
+        let id = mode == .playback ? playingFrame : (mode == .review ? current : nil)
+        return id.flatMap { frames.firstIndex(of: $0) }
+    }
+
+    var canMark: Bool { markableIndex != nil }
+
+    /// Starts playback at the frame showing (I). An out mark before it goes.
+    func markInAtCurrent() {
+        guard let index = markableIndex, let range = playRange else { return }
+        setPlayRange(index...max(index, range.upperBound))
+    }
+
+    /// Stops playback after the frame showing (O). An in mark after it goes.
+    func markOutAtCurrent() {
+        guard let index = markableIndex, let range = playRange else { return }
+        setPlayRange(min(index, range.lowerBound)...index)
+    }
+
+    /// Plays the whole animation again.
+    func clearMarks() {
+        markIn = nil
+        markOut = nil
+    }
+
+    /// Plays only these frames, by index. An end at the first or last frame
+    /// is left unmarked, so it follows frames added there.
+    func setPlayRange(_ range: ClosedRange<Int>) {
+        guard !frames.isEmpty else { return }
+        let lower = min(max(range.lowerBound, 0), frames.count - 1)
+        let upper = min(max(range.upperBound, lower), frames.count - 1)
+        markIn = lower == 0 ? nil : frames[lower].id
+        markOut = upper == frames.count - 1 ? nil : frames[upper].id
     }
 
     /// Back to the window, paused where it was.
@@ -157,26 +213,23 @@ final class WindowModel: ObservableObject {
         if isPlayingFullScreen { endFullScreen() } else { playFullScreen() }
     }
 
+    /// `playbackStart` is when the in mark's frame showed (or would have).
     private func startPlayback(fromIndex index: Int) {
         let fps = Double(max(project.framesPerSecond, 1))
-        let offset = Double(frames.playbackStart(ofIndex: index)) / fps
+        let first = playRange?.lowerBound ?? 0
+        let offset = Double(frames.playbackStart(ofIndex: index) - frames.playbackStart(ofIndex: first)) / fps
         playbackStart = Date().addingTimeInterval(-offset)
         mode = .playback
     }
 
-    /// Where playback is at `date`: the frame showing, how far through its
-    /// hold (0 to 1), and whether a non-looping playback has reached the end.
+    /// Where playback is at `date`, between the in and out marks: the frame
+    /// showing, how far through its hold (0 to 1), and whether a non-looping
+    /// playback has reached the out mark.
     func playbackPosition(at date: Date) -> (index: Int, fraction: Double, finished: Bool)? {
-        let length = frames.playbackLength
-        guard length > 0 else { return nil }
+        guard let range = playRange else { return nil }
         let fps = Double(max(project.framesPerSecond, 1))
-        let t = max(0, date.timeIntervalSince(playbackStart) * fps)
-        let finished = !project.loopPlayback && t >= Double(length)
-        let position = finished ? Double(length) - 0.001 : t.truncatingRemainder(dividingBy: Double(length))
-        guard let index = frames.index(atPlaybackFrame: Int(position)) else { return nil }
-        let start = Double(frames.playbackStart(ofIndex: index))
-        let fraction = (position - start) / Double(frames[index].hold)
-        return (index, min(max(fraction, 0), 1), finished)
+        return frames.playbackPosition(at: date.timeIntervalSince(playbackStart) * fps,
+                                       in: range, loops: project.loopPlayback)
     }
 
     /// Moves the playhead to a frame: pauses playback and shows that frame.

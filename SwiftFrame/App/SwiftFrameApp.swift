@@ -60,6 +60,15 @@ struct FrameCommands: Commands {
             Button("Exit Full Screen Playback") { model?.endFullScreen() }
                 .keyboardShortcut(.escape, modifiers: [])
                 .disabled(model?.isPlayingFullScreen != true)
+            Button("Set In") { model?.markInAtCurrent() }
+                .keyboardShortcut("i", modifiers: [])
+                .disabled(model?.canMark != true)
+            Button("Set Out") { model?.markOutAtCurrent() }
+                .keyboardShortcut("o", modifiers: [])
+                .disabled(model?.canMark != true)
+            Button("Clear In and Out") { model?.clearMarks() }
+                .keyboardShortcut("x", modifiers: .option)
+                .disabled(model?.hasMarks != true)
             Button("Go Live") { model?.goLive() }
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(model == nil || model?.mode == .live)

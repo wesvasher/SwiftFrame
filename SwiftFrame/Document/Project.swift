@@ -63,6 +63,33 @@ extension Array where Element == Frame {
 
     func firstIndex(of id: UUID) -> Int? { firstIndex { $0.id == id } }
 
+    /// The frames playback covers between the in and out marks, by index:
+    /// a missing mark (or one whose frame is gone) is the first or last
+    /// frame. Nil when there are no frames.
+    func playRange(in inID: UUID?, out outID: UUID?) -> ClosedRange<Int>? {
+        guard !isEmpty else { return nil }
+        let a = inID.flatMap { firstIndex(of: $0) } ?? 0
+        let b = outID.flatMap { firstIndex(of: $0) } ?? count - 1
+        return Swift.min(a, b)...Swift.max(a, b)
+    }
+
+    /// Where playback is `t` playback frames after starting at the beginning
+    /// of `range`: the frame showing, how far through its hold (0 to 1), and
+    /// whether a playback that doesn't loop has reached the end of the range.
+    func playbackPosition(at t: Double, in range: ClosedRange<Int>, loops: Bool)
+        -> (index: Int, fraction: Double, finished: Bool)? {
+        guard range.lowerBound >= 0, range.upperBound < count else { return nil }
+        let start = playbackStart(ofIndex: range.lowerBound)
+        let length = playbackStart(ofIndex: range.upperBound + 1) - start
+        guard length > 0 else { return nil }
+        let t = Swift.max(0, t)
+        let finished = !loops && t >= Double(length)
+        let position = Double(start) + (finished ? Double(length) - 0.001 : t.truncatingRemainder(dividingBy: Double(length)))
+        guard let index = index(atPlaybackFrame: Int(position)) else { return nil }
+        let fraction = (position - Double(playbackStart(ofIndex: index))) / Double(self[index].hold)
+        return (index, Swift.min(Swift.max(fraction, 0), 1), finished)
+    }
+
     /// Removes the frames, returning the frame to select afterwards: the one
     /// after the last removed frame, else the one before.
     @discardableResult

@@ -227,3 +227,67 @@ import Testing
         #expect(!model.isPlayingFullScreen)
     }
 }
+
+@MainActor @Suite struct PlayRangeTests {
+    func model(frames: Int, loop: Bool = true) -> WindowModel {
+        var project = Project()
+        project.framesPerSecond = 10
+        project.loopPlayback = loop
+        project.frames = (0..<frames).map { _ in Frame(image: UUID()) }
+        return WindowModel(document: StopMotionDocument(project: project, images: [:]))
+    }
+
+    @Test func marksFromTheFrameShowing() {
+        let model = model(frames: 6)
+        #expect(!model.canMark && model.playRange == 0...5 && !model.hasMarks)
+        model.select(model.frames[1].id)
+        model.markInAtCurrent()
+        model.select(model.frames[3].id)
+        model.markOutAtCurrent()
+        #expect(model.playRange == 1...3 && model.hasMarks)
+        // An in mark after the out mark pushes the out mark along.
+        model.select(model.frames[4].id)
+        model.markInAtCurrent()
+        #expect(model.playRange == 4...4)
+        model.clearMarks()
+        #expect(model.playRange == 0...5 && !model.hasMarks)
+    }
+
+    @Test func anEndAtTheEdgeFollowsNewFrames() {
+        let model = model(frames: 4)
+        model.setPlayRange(2...3)
+        #expect(model.markOut == nil)
+        model.edit("Add") { $0.frames.append(Frame(image: UUID())) }
+        #expect(model.playRange == 2...4)
+    }
+
+    @Test func playbackLoopsBetweenTheMarks() {
+        let model = model(frames: 6)
+        model.setPlayRange(2...3)
+        model.togglePlayback()   // From live: starts at the in mark.
+        let start = model.playbackStart
+        #expect(model.playbackPosition(at: start.addingTimeInterval(0.05))?.index == 2)
+        #expect(model.playbackPosition(at: start.addingTimeInterval(0.15))?.index == 3)
+        // Two frames at 10 fps: back to the in mark at 0.2 s.
+        #expect(model.playbackPosition(at: start.addingTimeInterval(0.25))?.index == 2)
+    }
+
+    @Test func playbackStopsAtTheOutMark() {
+        let model = model(frames: 6, loop: false)
+        model.setPlayRange(1...2)
+        model.select(model.frames[2].id)
+        model.togglePlayback()   // On the out mark: starts over at the in mark.
+        let end = model.playbackPosition(at: model.playbackStart.addingTimeInterval(5))
+        #expect(end?.index == 2 && end?.finished == true)
+        #expect(model.playbackPosition(at: model.playbackStart.addingTimeInterval(0.01))?.index == 1)
+    }
+
+    @Test func resumesInsideTheMarks() {
+        let model = model(frames: 6)
+        model.setPlayRange(1...4)
+        model.select(model.frames[2].id)
+        model.togglePlayback()
+        // Frame 3 is 0.1 s after the in mark at 10 fps.
+        #expect(abs(Date().timeIntervalSince(model.playbackStart) - 0.1) < 0.05)
+    }
+}

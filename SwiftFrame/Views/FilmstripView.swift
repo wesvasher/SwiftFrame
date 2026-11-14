@@ -48,7 +48,7 @@ struct FilmstripView: View {
         }
         .overlay(alignment: .trailing) {
             CaptureTile(model: model)
-                .padding(.top, FilmstripLayout.scrubHeight)
+                .padding(.top, FilmstripLayout.headerHeight)
                 .padding(.bottom, 8)
                 .padding(.horizontal, FilmstripLayout.inset)
                 .frame(maxHeight: .infinity)
@@ -67,7 +67,7 @@ struct FilmstripView: View {
             if let id = model.current { scrollPosition.scrollTo(id: id, anchor: .center) }
             else { scrollPosition.scrollTo(edge: .trailing) }
         }
-        .frame(height: FrameCell.height + FilmstripLayout.scrubHeight + 8)
+        .frame(height: FrameCell.height + FilmstripLayout.headerHeight + 8)
     }
 
     /// The width the frames can be seen in: the scroll view less the Capture tile.
@@ -166,13 +166,21 @@ struct FilmstripContent: View {
             EndSpace(model: model)
         }
         .padding(.leading, FilmstripLayout.inset)
-        .padding(.top, FilmstripLayout.scrubHeight)
+        .padding(.top, FilmstripLayout.headerHeight)
         .padding(.bottom, 8)
+        .overlay(alignment: .topLeading) {
+            // The in-to-out bar, on its own row above the frames.
+            if !model.frames.isEmpty { RangeStrip(model: model) }
+        }
         .overlay(alignment: .top) {
-            if !model.frames.isEmpty { ScrubStrip(model: model) }
+            if !model.frames.isEmpty {
+                ScrubStrip(model: model).padding(.top, FilmstripLayout.rangeHeight)
+            }
         }
         .overlay(alignment: .topLeading) {
-            if !model.frames.isEmpty { Playhead(model: model) }
+            if !model.frames.isEmpty {
+                Playhead(model: model).padding(.top, FilmstripLayout.rangeHeight)
+            }
         }
         .coordinateSpace(.named(FilmstripLayout.space))
     }
@@ -221,6 +229,10 @@ enum FilmstripLayout {
     }
     /// The strip above the frames that moves the playhead.
     static let scrubHeight: CGFloat = 18
+    /// The in-to-out bar's row, above the scrub strip.
+    static let rangeHeight: CGFloat = 16
+    /// Everything above the frames.
+    static let headerHeight: CGFloat = rangeHeight + scrubHeight
     static let space = "filmstrip"
 
     static func stride(_ thumbnailWidth: CGFloat) -> CGFloat {
@@ -246,9 +258,113 @@ enum FilmstripLayout {
         inset + CGFloat(index) * stride(thumbnailWidth)
     }
 
+    /// The boundary between cells nearest `x`: 0 is before the first frame,
+    /// `n` is after frame `n - 1`.
+    static func boundary(at x: CGFloat, thumbnailWidth: CGFloat) -> Int {
+        max(0, Int(((x - inset) / stride(thumbnailWidth)).rounded()))
+    }
+
     /// The cell under `x`; `frames.count` or more is past the last frame.
     static func index(at x: CGFloat, thumbnailWidth: CGFloat) -> Int {
         max(0, Int(((x - inset + spacing(thumbnailWidth) / 2) / stride(thumbnailWidth)).rounded(.down)))
+    }
+}
+
+/// The in-to-out bar above the frames: playback starts at its left end and
+/// stops (or loops) at its right end. Drag an end to move it, drag the bar to
+/// move both, double-click it to play everything again. Faint until marked.
+private struct RangeStrip: View {
+    @ObservedObject var model: WindowModel
+    /// The marks when a drag began.
+    @State private var dragStart: ClosedRange<Int>?
+    @State private var isHovered = false
+
+    private enum End { case start, end }
+    private let handleWidth: CGFloat = 8
+
+    var body: some View {
+        let width = model.thumbnailWidth
+        let range = model.playRange ?? 0...0
+        let x0 = FilmstripLayout.cellX(range.lowerBound, thumbnailWidth: width)
+        let x1 = FilmstripLayout.cellX(range.upperBound + 1, thumbnailWidth: width) - FilmstripLayout.spacing(width)
+        let marked = model.hasMarks
+        let tint = marked ? Color.accentColor : Color.secondary
+        let height = FilmstripLayout.rangeHeight - 4
+
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            // The bar, with a handle at each end.
+            RoundedRectangle(cornerRadius: 4)
+                .fill(tint.opacity(marked ? 0.3 : (isHovered ? 0.18 : 0.1)))
+                .strokeBorder(tint.opacity(marked ? 0.9 : 0.35), lineWidth: 1)
+                .frame(width: max(x1 - x0, handleWidth * 2), height: height)
+                .contentShape(.rect)
+                .gesture(moveBoth)
+                .onTapGesture(count: 2) { withAnimation(.snappy(duration: 0.2)) { model.clearMarks() } }
+                .pointerStyle(dragStart != nil ? .grabActive : .grabIdle)
+                .offset(x: x0, y: 2)
+            handle(.start, tint: tint, marked: marked)
+                .offset(x: x0, y: 2)
+            handle(.end, tint: tint, marked: marked)
+                .offset(x: max(x1, x0 + handleWidth * 2) - handleWidth, y: 2)
+        }
+        .frame(height: FilmstripLayout.rangeHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onHover { isHovered = $0 }
+        .animation(.snappy(duration: 0.18), value: model.playRange)
+        .contextMenu {
+            Button("Set In at Current Frame") { model.markInAtCurrent() }.disabled(!model.canMark)
+            Button("Set Out at Current Frame") { model.markOutAtCurrent() }.disabled(!model.canMark)
+            Button("Clear In and Out") { model.clearMarks() }.disabled(!model.hasMarks)
+        }
+        .help(marked
+              ? "Playback runs between these ends. Drag an end or the bar to change it; double-click to play everything (I, O, ⌥X)"
+              : "Drag an end to play only part of the animation (I, O)")
+        .accessibilityElement()
+        .accessibilityLabel("Playback range")
+        .accessibilityValue(marked ? "Frames \(range.lowerBound + 1) to \(range.upperBound + 1)" : "All frames")
+    }
+
+    private func handle(_ end: End, tint: Color, marked: Bool) -> some View {
+        UnevenRoundedRectangle(cornerRadii: end == .start
+                               ? .init(topLeading: 4, bottomLeading: 4)
+                               : .init(bottomTrailing: 4, topTrailing: 4))
+            .fill(tint.opacity(marked ? 1 : 0.45))
+            .overlay {
+                Capsule().fill(.white.opacity(0.85)).frame(width: 1.5, height: 6)
+            }
+            .frame(width: handleWidth, height: FilmstripLayout.rangeHeight - 4)
+            // A wider grab area than it looks.
+            .padding(.horizontal, 3)
+            .contentShape(.rect)
+            .padding(.horizontal, -3)
+            .gesture(moveEnd(end))
+            .pointerStyle(.frameResize(position: end == .start ? .leading : .trailing))
+    }
+
+    private func moveEnd(_ end: End) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .named(FilmstripLayout.space))
+            .onChanged { value in
+                guard let range = model.playRange else { return }
+                let boundary = FilmstripLayout.boundary(at: value.location.x, thumbnailWidth: model.thumbnailWidth)
+                switch end {
+                case .start: model.setPlayRange(min(boundary, range.upperBound)...range.upperBound)
+                case .end: model.setPlayRange(range.lowerBound...max(boundary - 1, range.lowerBound))
+                }
+            }
+    }
+
+    private var moveBoth: some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .named(FilmstripLayout.space))
+            .onChanged { value in
+                guard let start = dragStart ?? model.playRange else { return }
+                dragStart = start
+                let last = model.frames.count - 1
+                let steps = Int((value.translation.width / FilmstripLayout.stride(model.thumbnailWidth)).rounded())
+                let shift = min(max(steps, -start.lowerBound), last - start.upperBound)
+                model.setPlayRange((start.lowerBound + shift)...(start.upperBound + shift))
+            }
+            .onEnded { _ in dragStart = nil }
     }
 }
 
