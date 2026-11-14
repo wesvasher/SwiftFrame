@@ -390,11 +390,14 @@ final class WindowModel: ObservableObject {
     // MARK: - Editing
 
     /// Moves the selected frames to the recycle bin, animated.
+    /// How timeline edits move frames around: a quick spring.
+    static let frameAnimation = Animation.spring(response: 0.32, dampingFraction: 0.85)
+
     func deleteSelection() {
         guard hasSelection else { return }
         let ids = selection
         var next: UUID?
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+        withAnimation(Self.frameAnimation) {
             edit(ids.count == 1 ? "Move Frame to Recycle Bin" : "Move Frames to Recycle Bin") {
                 next = $0.moveToBin(ids: ids)
             }
@@ -410,7 +413,7 @@ final class WindowModel: ObservableObject {
     func restoreFromBin(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
         var restored: [UUID] = []
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+        withAnimation(Self.frameAnimation) {
             edit(ids.count == 1 ? "Put Back Frame" : "Put Back Frames") { restored = $0.restoreFromBin(ids: ids) }
             if !restored.isEmpty {
                 selection = Set(restored)
@@ -462,7 +465,7 @@ final class WindowModel: ObservableObject {
     func shiftSelection(by delta: Int) {
         guard hasSelection, canShiftSelection(by: delta) else { return }
         let ids = selection
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+        withAnimation(Self.frameAnimation) {
             edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.shift(ids: ids, by: delta) }
         }
     }
@@ -481,9 +484,12 @@ final class WindowModel: ObservableObject {
 
     /// Drag and drop in the filmstrip: moves the dragged frame (or the whole
     /// selection, if it's part of it) before `target`, or to the end.
+    /// The moved frames slide to their new place and the others make room.
     func move(dragged: UUID, before target: UUID?) {
         let ids = selection.contains(dragged) ? selection : [dragged]
-        edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
+        withAnimation(Self.frameAnimation) {
+            edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
+        }
     }
 
     /// Moves the selected frames, in order, to the start or the end.
@@ -491,7 +497,9 @@ final class WindowModel: ObservableObject {
         guard hasSelection else { return }
         let ids = selection
         let target = toStart ? frames.first(where: { !ids.contains($0.id) })?.id : nil
-        edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
+        withAnimation(Self.frameAnimation) {
+            edit(ids.count == 1 ? "Move Frame" : "Move Frames") { $0.frames.move(ids: ids, before: target) }
+        }
     }
 
     /// Puts the frame's picture on the clipboard.
