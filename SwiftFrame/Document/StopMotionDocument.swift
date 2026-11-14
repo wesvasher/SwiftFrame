@@ -79,12 +79,16 @@ final class StopMotionDocument: ReferenceFileDocument, @unchecked Sendable {
         for id in Set(snapshot.project.frames.map(\.image)) {
             let name = "\(id.uuidString).jpg"
             if let reused = old[name], reused.isRegularFile {
+                // Already named; renaming a wrapper that's still in the open
+                // file's folder makes NSFileWrapper update its folders while
+                // saving runs in the background, which crashed.
                 frames[name] = reused
             } else if let data = snapshot.images[id] {
-                frames[name] = FileWrapper(regularFileWithContents: data)
+                let wrapper = FileWrapper(regularFileWithContents: data)
+                wrapper.preferredFilename = name
+                frames[name] = wrapper
             }
         }
-        for (name, wrapper) in frames { wrapper.preferredFilename = name }
 
         let framesWrapper = FileWrapper(directoryWithFileWrappers: frames)
         let projectWrapper = FileWrapper(regularFileWithContents: json)

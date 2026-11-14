@@ -95,3 +95,29 @@ import Testing
         #expect(readImages == [a: Data([1, 2, 3]), b: Data([4, 5])])
     }
 }
+
+@Suite struct RepeatedSaveTests {
+    /// Each save reuses the last save's picture files, as autosaving does;
+    /// renaming a reused file that's already in a folder crashed.
+    @Test func savesOverAndOverReusingPictures() throws {
+        let image = UUID()
+        var project = Project()
+        project.frames = [Frame(image: image), Frame(image: image)]
+        let snapshot = StopMotionDocument.Snapshot(project: project, images: [image: Data([0xFF, 0xD8, 0xFF, 0xD9])])
+
+        // Saved once, then read back from disk like an open document.
+        let url = FileManager.default.temporaryDirectory.appending(path: "SwiftFrameTest-\(UUID()).swiftframe")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try StopMotionDocument.fileWrapper(for: snapshot, existing: nil).write(to: url, originalContentsURL: nil)
+        var existing: FileWrapper? = try FileWrapper(url: url)
+        var kept: [FileWrapper] = []
+        for _ in 0..<5 {
+            let wrapper = try StopMotionDocument.fileWrapper(for: snapshot, existing: existing)
+            kept.append(wrapper)
+            try wrapper.write(to: url, options: .atomic, originalContentsURL: url)
+            existing = wrapper
+        }
+        let (read, images) = try StopMotionDocument.read(try #require(existing))
+        #expect(read.frames.count == 2 && images[image] != nil)
+    }
+}
