@@ -15,12 +15,17 @@ struct FilmstripView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if isZoomedIn {
-                navigator
-                    .padding(.horizontal, FilmstripLayout.inset)
-                    .padding(.top, 6)
-                    .transition(.opacity)
+            // The navigator's space is always kept, so the window's layout
+            // doesn't jump when zooming makes the strip scroll.
+            ZStack {
+                if isZoomedIn {
+                    navigator.transition(.opacity)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: StripNavigator<EmptyView>.height)
+            .padding(.horizontal, FilmstripLayout.inset)
+            .padding(.top, 6)
             strip
         }
         .animation(.easeOut(duration: 0.15), value: isZoomedIn)
